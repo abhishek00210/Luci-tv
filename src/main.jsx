@@ -27,6 +27,11 @@ const HICINE_ORIGIN = 'https://api.hicine.info';
 const isLocalBackend =
   window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const apiOrigin = import.meta.env.VITE_API_ORIGIN || (isLocalBackend ? '' : HICINE_ORIGIN);
+const sameOriginStreamProxy = import.meta.env.VITE_SAME_ORIGIN_STREAM_PROXY === 'true';
+const streamProxyOrigin =
+  import.meta.env.VITE_STREAM_PROXY_ORIGIN ||
+  import.meta.env.VITE_BACKEND_ORIGIN ||
+  (isLocalBackend || sameOriginStreamProxy ? '' : null);
 
 function apiUrl(path) {
   if (/^https?:\/\//.test(path)) return path;
@@ -173,15 +178,15 @@ function detailUrl(contentType, slug) {
 }
 
 function downloadUrl(rawUrl) {
-  if (isLocalBackend) {
-    return `/api/download?url=${encodeURIComponent(rawUrl)}&redirect=true`;
+  if (streamProxyOrigin !== null) {
+    return `${streamProxyOrigin}/api/download?url=${encodeURIComponent(rawUrl)}&redirect=true`;
   }
   return rawUrl;
 }
 
 function streamUrl(rawUrl) {
-  if (isLocalBackend) {
-    return `/api/stream?url=${encodeURIComponent(rawUrl)}`;
+  if (streamProxyOrigin !== null) {
+    return `${streamProxyOrigin}/api/stream?url=${encodeURIComponent(rawUrl)}`;
   }
   return rawUrl;
 }
@@ -336,10 +341,15 @@ function App() {
 
 function Player({ player, onClose, onStream }) {
   const { detail, loading, stream } = player;
+  const [streamFailed, setStreamFailed] = useState(false);
   const downloads = parseMovieLinks(detail.links || detail.cloudlinks);
   const seasons = parseSeasons(detail);
   const firstStream = downloads[0] || seasons[0]?.episodes[0]?.qualities[0] || null;
   const activeStreamUrl = stream ? streamUrl(stream.downloadUrl) : '';
+
+  useEffect(() => {
+    setStreamFailed(false);
+  }, [stream?.downloadUrl]);
 
   return (
     <section className="playerWrap">
@@ -358,7 +368,25 @@ function Player({ player, onClose, onStream }) {
 
       <div className="playerBox" style={{ backgroundImage: stream ? undefined : `url(${detail.image})` }}>
         {stream ? (
-          <video src={activeStreamUrl} controls autoPlay playsInline />
+          <>
+            <video
+              src={activeStreamUrl}
+              controls
+              autoPlay
+              playsInline
+              onError={() => setStreamFailed(true)}
+            />
+            {streamFailed && (
+              <div className="playerFallback">
+                <strong>Browser playback is not available for this file.</strong>
+                <span>Try opening the stream directly, or download it to play in VLC/MX Player.</span>
+                <div className="fallbackActions">
+                  <a href={activeStreamUrl} target="_blank" rel="noreferrer">Open stream</a>
+                  <a href={downloadUrl(stream.downloadUrl)}>Download</a>
+                </div>
+              </div>
+            )}
+          </>
         ) : (
           <button
             className="startBtn"

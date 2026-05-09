@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: luci-tv
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PRODUCTION_API_URL
+        value: https://api.hicine.info
+      - key: VITE_SAME_ORIGIN_STREAM_PROXY
+        value: "true"
