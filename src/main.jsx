@@ -23,6 +23,16 @@ const sections = [
   { label: 'TV Shows', type: 'tvshows', path: '/api/tvshows' },
 ];
 
+const HICINE_ORIGIN = 'https://api.hicine.info';
+const isLocalBackend =
+  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const apiOrigin = import.meta.env.VITE_API_ORIGIN || (isLocalBackend ? '' : HICINE_ORIGIN);
+
+function apiUrl(path) {
+  if (/^https?:\/\//.test(path)) return path;
+  return `${apiOrigin}${path}`;
+}
+
 function decodeText(value = '') {
   return String(value)
     .replace(/&#039;/g, "'")
@@ -58,7 +68,7 @@ function normalizeItem(item, fallbackType) {
 }
 
 async function fetchJson(url, signal) {
-  const res = await fetch(url, { signal });
+  const res = await fetch(apiUrl(url), { signal });
   const text = await res.text();
   let data = null;
 
@@ -157,6 +167,25 @@ function buildSectionUrl(section, query) {
   return `${section.path}?${params.toString()}`;
 }
 
+function detailUrl(contentType, slug) {
+  if (!contentType || !slug) return '';
+  return `/api/${contentType}/${slug}`;
+}
+
+function downloadUrl(rawUrl) {
+  if (isLocalBackend) {
+    return `/api/download?url=${encodeURIComponent(rawUrl)}&redirect=true`;
+  }
+  return rawUrl;
+}
+
+function streamUrl(rawUrl) {
+  if (isLocalBackend) {
+    return `/api/stream?url=${encodeURIComponent(rawUrl)}`;
+  }
+  return rawUrl;
+}
+
 function App() {
   const [activeType, setActiveType] = useState(() => sessionStorage.getItem('luci_tab') || 'movies');
   const [query, setQuery] = useState(() => sessionStorage.getItem('luci_query') || '');
@@ -229,10 +258,8 @@ function App() {
     }, 80);
 
     try {
-      const detailPath = normalized.contentType
-        ? `/api/${normalized.contentType}/${normalized.slug}`
-        : `${activeSection.path}/${normalized.slug}`;
-      const payload = await fetchJson(detailPath.replace(/\/+/g, '/'));
+      const detailPath = detailUrl(normalized.contentType, normalized.slug);
+      const payload = await fetchJson(detailPath);
       const detail = normalizeItem({ ...normalized, ...(payload.data || payload) }, normalized.contentType);
       setPlayer({ item: normalized, detail, loading: false, stream: null });
     } catch {
@@ -312,7 +339,7 @@ function Player({ player, onClose, onStream }) {
   const downloads = parseMovieLinks(detail.links || detail.cloudlinks);
   const seasons = parseSeasons(detail);
   const firstStream = downloads[0] || seasons[0]?.episodes[0]?.qualities[0] || null;
-  const streamUrl = stream ? `/api/stream?url=${encodeURIComponent(stream.downloadUrl)}` : '';
+  const activeStreamUrl = stream ? streamUrl(stream.downloadUrl) : '';
 
   return (
     <section className="playerWrap">
@@ -331,7 +358,7 @@ function Player({ player, onClose, onStream }) {
 
       <div className="playerBox" style={{ backgroundImage: stream ? undefined : `url(${detail.image})` }}>
         {stream ? (
-          <video src={streamUrl} controls autoPlay playsInline />
+          <video src={activeStreamUrl} controls autoPlay playsInline />
         ) : (
           <button
             className="startBtn"
@@ -393,7 +420,7 @@ function DownloadRow({ download, onStream, active = false, compact = false }) {
       </div>
       <div className="downloadActions">
         <button type="button" onClick={() => onStream(download)}>Stream</button>
-        <a href={`/api/download?url=${encodeURIComponent(download.downloadUrl)}&redirect=true`}>Download</a>
+        <a href={downloadUrl(download.downloadUrl)}>Download</a>
       </div>
     </div>
   );
