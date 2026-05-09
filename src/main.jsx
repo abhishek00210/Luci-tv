@@ -59,8 +59,20 @@ function normalizeItem(item, fallbackType) {
 
 async function fetchJson(url, signal) {
   const res = await fetch(url, { signal });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || data.error || `Request failed: ${res.status}`);
+  const text = await res.text();
+  let data = null;
+
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    const preview = text.replace(/\s+/g, ' ').trim().slice(0, 120);
+    throw new Error(preview || `Request returned non-JSON response: ${res.status}`);
+  }
+
+  if (!res.ok) {
+    throw new Error(data?.message || data?.error || `Request failed: ${res.status}`);
+  }
+
   return data;
 }
 

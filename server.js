@@ -109,15 +109,19 @@ function getDownloadWorkerOrigin(rawUrl) {
 async function proxyJson(res, target) {
   const response = await fetch(target);
   const contentType = response.headers.get('content-type') || '';
+  const text = await response.text();
+  let data = null;
 
-  if (!contentType.includes('application/json')) {
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
     return res.status(response.status).json({
       success: false,
-      message: 'Production API returned a non-JSON response',
+      message: contentType.includes('text/html')
+        ? 'Production API returned a page instead of JSON'
+        : text.replace(/\s+/g, ' ').trim().slice(0, 180) || 'Production API returned a non-JSON response',
     });
   }
-
-  const data = await response.json();
 
   return res.status(response.status).json(data);
 }
