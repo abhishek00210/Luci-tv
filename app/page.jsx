@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { createRoot } from 'react-dom/client';
-import './styles.css';
+'use client';
+
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 const sections = [
   { label: 'Movies', type: 'movies', path: '/api/movies' },
@@ -24,14 +24,7 @@ const sections = [
 ];
 
 const HICINE_ORIGIN = 'https://api.hicine.info';
-const isLocalBackend =
-  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const apiOrigin = import.meta.env.VITE_API_ORIGIN || (isLocalBackend ? '' : HICINE_ORIGIN);
-const sameOriginStreamProxy = import.meta.env.VITE_SAME_ORIGIN_STREAM_PROXY === 'true';
-const streamProxyOrigin =
-  import.meta.env.VITE_STREAM_PROXY_ORIGIN ||
-  import.meta.env.VITE_BACKEND_ORIGIN ||
-  (isLocalBackend || sameOriginStreamProxy ? '' : null);
+const apiOrigin = process.env.NEXT_PUBLIC_API_ORIGIN || HICINE_ORIGIN;
 
 function apiUrl(path) {
   if (/^https?:\/\//.test(path)) return path;
@@ -178,22 +171,16 @@ function detailUrl(contentType, slug) {
 }
 
 function downloadUrl(rawUrl) {
-  if (streamProxyOrigin !== null) {
-    return `${streamProxyOrigin}/api/download?url=${encodeURIComponent(rawUrl)}&redirect=true`;
-  }
   return rawUrl;
 }
 
 function streamUrl(rawUrl) {
-  if (streamProxyOrigin !== null) {
-    return `${streamProxyOrigin}/api/stream?url=${encodeURIComponent(rawUrl)}`;
-  }
   return rawUrl;
 }
 
 function App() {
-  const [activeType, setActiveType] = useState(() => sessionStorage.getItem('luci_tab') || 'movies');
-  const [query, setQuery] = useState(() => sessionStorage.getItem('luci_query') || '');
+  const [activeType, setActiveType] = useState('movies');
+  const [query, setQuery] = useState('');
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -204,6 +191,11 @@ function App() {
     () => sections.find((section) => section.type === activeType) || sections[0],
     [activeType],
   );
+
+  useEffect(() => {
+    setActiveType(sessionStorage.getItem('luci_tab') || 'movies');
+    setQuery(sessionStorage.getItem('luci_query') || '');
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -379,7 +371,7 @@ function Player({ player, onClose, onStream }) {
             {streamFailed && (
               <div className="playerFallback">
                 <strong>Browser playback is not available for this file.</strong>
-                <span>Try opening the stream directly, or download it to play in VLC/MX Player.</span>
+                <span>This frontend-only Vercel build opens the source link directly. Download it to play in VLC/MX Player if the browser cannot decode it.</span>
                 <div className="fallbackActions">
                   <a href={activeStreamUrl} target="_blank" rel="noreferrer">Open stream</a>
                   <a href={downloadUrl(stream.downloadUrl)}>Download</a>
@@ -490,4 +482,4 @@ function MediaCard({ item, selected, onClick }) {
   );
 }
 
-createRoot(document.getElementById('root')).render(<App />);
+export default App;

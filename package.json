@@ -4,19 +4,15 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "node server.js",
-    "build": "vite build",
-    "start": "NODE_ENV=production node server.js",
-    "preview": "NODE_ENV=production node server.js"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "preview": "next start"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "latest",
-    "dotenv": "latest",
-    "express": "latest",
-    "vite": "latest",
+    "next": "latest",
     "react": "latest",
-    "react-dom": "latest",
-    "lucide-react": "latest"
+    "react-dom": "latest"
   },
   "devDependencies": {}
 }
