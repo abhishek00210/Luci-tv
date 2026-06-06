@@ -1,0 +1,9 @@
+{
+  "appId": "com.lucitv.app",
+  "appName": "Luci-TV",
+  "webDir": "public",
+  "server": {
+    "url": "https://abhishekstreaming.vercel.app",
+    "cleartext": false
+  }
+}
