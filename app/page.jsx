@@ -25,6 +25,7 @@ const sections = [
 
 const HICINE_ORIGIN = 'https://api.hicine.info';
 const apiOrigin = process.env.NEXT_PUBLIC_API_ORIGIN || HICINE_ORIGIN;
+const streamApiOrigin = process.env.NEXT_PUBLIC_STREAM_API_ORIGIN || '';
 
 function apiUrl(path) {
   if (/^https?:\/\//.test(path)) return path;
@@ -171,10 +172,18 @@ function detailUrl(contentType, slug) {
 }
 
 function downloadUrl(rawUrl) {
+  if (streamApiOrigin) {
+    return `${streamApiOrigin}/api/download?url=${encodeURIComponent(rawUrl)}&redirect=true`;
+  }
+
   return rawUrl;
 }
 
 function streamUrl(rawUrl) {
+  if (streamApiOrigin) {
+    return `${streamApiOrigin}/api/stream?url=${encodeURIComponent(rawUrl)}`;
+  }
+
   return rawUrl;
 }
 
@@ -338,6 +347,7 @@ function Player({ player, onClose, onStream }) {
   const seasons = parseSeasons(detail);
   const firstStream = downloads[0] || seasons[0]?.episodes[0]?.qualities[0] || null;
   const activeStreamUrl = stream ? streamUrl(stream.downloadUrl) : '';
+  const sourceUrl = stream?.downloadUrl || '';
 
   useEffect(() => {
     setStreamFailed(false);
@@ -373,7 +383,7 @@ function Player({ player, onClose, onStream }) {
                 <strong>Browser playback is not available for this file.</strong>
                 <span>This frontend-only Vercel build opens the source link directly. Download it to play in VLC/MX Player if the browser cannot decode it.</span>
                 <div className="fallbackActions">
-                  <a href={activeStreamUrl} target="_blank" rel="noreferrer">Open stream</a>
+                  <a href={sourceUrl || activeStreamUrl} target="_blank" rel="noreferrer">Open source</a>
                   <a href={downloadUrl(stream.downloadUrl)}>Download</a>
                 </div>
               </div>
