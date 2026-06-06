@@ -3,25 +3,41 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 const sections = [
-  { label: 'Movies', type: 'movies', path: '/api/movies' },
-  { label: 'Series', type: 'hollywood_series', path: '/api/hollywood_series' },
-  { label: 'Anime', type: 'anime', path: '/api/anime' },
-  { label: 'Bolly Movies', type: 'bollywood_movies', path: '/api/bollywood_movies' },
-  { label: 'Bolly Series', type: 'bollywood_series', path: '/api/bollywood_series' },
-  { label: 'Trending', type: 'trending', path: '/api/trending', flat: true },
-  { label: 'Dual Audio', type: 'dual', path: '/rpc/category/dual', flat: true },
-  { label: 'Netflix', type: 'netflix', path: '/rpc/platform/netflix', flat: true },
-  { label: 'Disney+', type: 'disney', path: '/rpc/platform/disney', flat: true },
-  { label: 'Amazon', type: 'amazon', path: '/rpc/platform/amazon', flat: true },
-  { label: 'Apple TV+', type: 'apple', path: '/rpc/platform/apple', flat: true },
-  { label: 'Zee5', type: 'zee5', path: '/rpc/platform/zee5', flat: true },
-  { label: 'SonyLIV', type: 'sony', path: '/rpc/platform/sony', flat: true },
-  { label: 'JioHotstar', type: 'jiohotstar', path: '/rpc/platform/jiohotstar', flat: true },
-  { label: 'Hollywood Movies', type: 'hollywood_movies', path: '/api/hollywood_movies' },
-  { label: 'KDrama', type: 'kdrama', path: '/api/kdrama' },
-  { label: 'Chinese Drama', type: 'chinese_drama', path: '/api/chinese_drama' },
-  { label: 'TV Shows', type: 'tvshows', path: '/api/tvshows' },
+  { label: 'Trending', type: 'trending', group: 'Library', path: '/api/trending', flat: true },
+  { label: 'Movies', type: 'movies', group: 'Library', path: '/api/movies' },
+  { label: 'Series', type: 'series', group: 'Library', path: '/api/series' },
+  { label: 'Anime', type: 'anime', group: 'Library', path: '/api/anime' },
+  { label: 'Bolly Movies', type: 'bollywood_movies', group: 'Library', path: '/api/bollywood_movies' },
+  { label: 'Bolly Series', type: 'bollywood_series', group: 'Library', path: '/api/bollywood_series' },
+  { label: 'Netflix', type: 'netflix', group: 'Platforms', path: '/rpc/platform/netflix', flat: true },
+  { label: 'Amazon', type: 'amazon', group: 'Platforms', path: '/rpc/platform/amazon', flat: true },
+  { label: 'Disney+', type: 'disney', group: 'Platforms', path: '/rpc/platform/disney', flat: true },
+  { label: 'Hotstar', type: 'hotstar', group: 'Platforms', path: '/rpc/platform/hotstar', flat: true },
+  { label: 'JioHotstar', type: 'jiohotstar', group: 'Platforms', path: '/rpc/platform/jiohotstar', flat: true },
+  { label: 'Apple TV+', type: 'apple', group: 'Platforms', path: '/rpc/platform/apple', flat: true },
+  { label: 'Zee5', type: 'zee5', group: 'Platforms', path: '/rpc/platform/zee5', flat: true },
+  { label: 'SonyLIV', type: 'sony', group: 'Platforms', path: '/rpc/platform/sony', flat: true },
+  { label: 'Hulu', type: 'hulu', group: 'Platforms', path: '/rpc/platform/hulu', flat: true },
+  { label: 'HBO', type: 'hbo', group: 'Platforms', path: '/rpc/platform/hbo', flat: true },
+  { label: 'Dual Audio', type: 'dual_audio', group: 'Categories', path: '/api/movies', category: 'Dual Audio Movies' },
+  { label: 'Action', type: 'action', group: 'Categories', path: '/api/movies', category: 'Action' },
+  { label: 'Comedy', type: 'comedy', group: 'Categories', path: '/api/movies', category: 'Comedy' },
+  { label: 'Romance', type: 'romance', group: 'Categories', path: '/api/movies', category: 'Romance' },
+  { label: 'Family', type: 'family', group: 'Categories', path: '/api/movies', category: 'Family' },
+  { label: 'Horror', type: 'horror', group: 'Categories', path: '/api/movies', category: 'Horror' },
+  { label: 'Thriller', type: 'thriller', group: 'Categories', path: '/api/movies', category: 'Thriller' },
+  { label: 'WEB-DL', type: 'webdl', group: 'Quality', path: '/api/movies', category: 'WEB-DL' },
+  { label: 'HDRip', type: 'hdrip', group: 'Quality', path: '/api/movies', category: 'HDRip' },
+  { label: '1080p', type: '1080p', group: 'Quality', path: '/api/movies', category: '1080p' },
+  { label: '720p', type: '720p', group: 'Quality', path: '/api/movies', category: '720p' },
+  { label: '480p', type: '480p', group: 'Quality', path: '/api/movies', category: '480p' },
+  { label: '2026', type: 'year_2026', group: 'Quality', path: '/api/movies', category: '2026' },
 ];
+
+const navGroups = ['Library', 'Platforms', 'Categories', 'Quality'].map((group) => ({
+  label: group,
+  sections: sections.filter((section) => section.group === group),
+}));
 
 const HICINE_ORIGIN = 'https://api.hicine.info';
 const apiOrigin = process.env.NEXT_PUBLIC_API_ORIGIN || HICINE_ORIGIN;
@@ -157,6 +173,9 @@ function buildSectionUrl(section, query) {
   } else {
     params.set('offset', '0');
     params.set('limit', query ? '80' : '500');
+  }
+  if (section.category) {
+    params.set('category', section.category);
   }
   if (query) {
     params.set('search', query);
@@ -317,14 +336,21 @@ function App() {
           <span className="logoAccent">Luci</span><span className="logoDot">·</span>TV
         </button>
         <nav className="tabs" aria-label="Categories">
-          {sections.map((section) => (
-            <button
-              key={section.type}
-              className={`tab ${activeType === section.type ? 'active' : ''}`}
-              onClick={() => changeTab(section.type)}
-            >
-              {section.label}
-            </button>
+          {navGroups.map((group) => (
+            <div className="tabGroup" key={group.label}>
+              <span className="tabGroupLabel">{group.label}</span>
+              <div className="tabGroupButtons">
+                {group.sections.map((section) => (
+                  <button
+                    key={section.type}
+                    className={`tab ${activeType === section.type ? 'active' : ''}`}
+                    onClick={() => changeTab(section.type)}
+                  >
+                    {section.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
       </header>
