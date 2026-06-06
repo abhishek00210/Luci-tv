@@ -25,7 +25,6 @@ const sections = [
 
 const HICINE_ORIGIN = 'https://api.hicine.info';
 const apiOrigin = process.env.NEXT_PUBLIC_API_ORIGIN || HICINE_ORIGIN;
-const streamApiOrigin = process.env.NEXT_PUBLIC_STREAM_API_ORIGIN || '';
 
 function apiUrl(path) {
   if (/^https?:\/\//.test(path)) return path;
@@ -172,19 +171,28 @@ function detailUrl(contentType, slug) {
 }
 
 function downloadUrl(rawUrl) {
-  if (streamApiOrigin) {
-    return `${streamApiOrigin}/api/download?url=${encodeURIComponent(rawUrl)}&redirect=true`;
-  }
+  return `/api/resolve-stream?url=${encodeURIComponent(rawUrl)}&redirect=true`;
+}
 
+function sourceUrl(rawUrl) {
   return rawUrl;
 }
 
-function streamUrl(rawUrl) {
-  if (streamApiOrigin) {
-    return `${streamApiOrigin}/api/stream?url=${encodeURIComponent(rawUrl)}`;
+async function resolveStream(download) {
+  const response = await fetch(`/api/resolve-stream?url=${encodeURIComponent(download.downloadUrl)}`);
+  const data = await response.json();
+
+  if (!response.ok || !data.success || !data.downloadUrl) {
+    throw new Error(data.message || 'Unable to resolve stream URL.');
   }
 
-  return rawUrl;
+  return {
+    ...download,
+    title: data.title || download.quality,
+    size: data.size || download.size,
+    resolvedUrl: data.downloadUrl,
+    server: data.server,
+  };
 }
 
 function App() {
@@ -277,8 +285,29 @@ function App() {
     setPlayer(null);
   }
 
-  function startStream(download) {
-    setPlayer((current) => ({ ...current, stream: download }));
+  async function startStream(download) {
+    setPlayer((current) => ({
+      ...current,
+      stream: {
+        ...download,
+        resolving: true,
+      },
+      streamError: '',
+    }));
+
+    try {
+      const resolved = await resolveStream(download);
+      setPlayer((current) => ({ ...current, stream: resolved, streamError: '' }));
+    } catch (streamError) {
+      setPlayer((current) => ({
+        ...current,
+        stream: {
+          ...download,
+          resolving: false,
+        },
+        streamError: streamError.message,
+      }));
+    }
   }
 
   return (
@@ -341,13 +370,13 @@ function App() {
 }
 
 function Player({ player, onClose, onStream }) {
-  const { detail, loading, stream } = player;
+  const { detail, loading, stream, streamError } = player;
   const [streamFailed, setStreamFailed] = useState(false);
   const downloads = parseMovieLinks(detail.links || detail.cloudlinks);
   const seasons = parseSeasons(detail);
   const firstStream = downloads[0] || seasons[0]?.episodes[0]?.qualities[0] || null;
-  const activeStreamUrl = stream ? streamUrl(stream.downloadUrl) : '';
-  const sourceUrl = stream?.downloadUrl || '';
+  const activeStreamUrl = stream?.resolvedUrl || '';
+  const rawSourceUrl = stream?.downloadUrl || '';
 
   useEffect(() => {
     setStreamFailed(false);
@@ -369,7 +398,12 @@ function Player({ player, onClose, onStream }) {
       </div>
 
       <div className="playerBox" style={{ backgroundImage: stream ? undefined : `url(${detail.image})` }}>
-        {stream ? (
+        {stream?.resolving ? (
+          <div className="playerFallback">
+            <strong>Preparing stream...</strong>
+            <span>Resolving a fresh direct video link from the source.</span>
+          </div>
+        ) : stream && activeStreamUrl ? (
           <>
             <video
               src={activeStreamUrl}
@@ -381,14 +415,23 @@ function Player({ player, onClose, onStream }) {
             {streamFailed && (
               <div className="playerFallback">
                 <strong>Browser playback is not available for this file.</strong>
-                <span>This frontend-only Vercel build opens the source link directly. Download it to play in VLC/MX Player if the browser cannot decode it.</span>
+                <span>Try opening the resolved source directly, or download it to play in VLC/MX Player.</span>
                 <div className="fallbackActions">
-                  <a href={sourceUrl || activeStreamUrl} target="_blank" rel="noreferrer">Open source</a>
+                  <a href={activeStreamUrl || sourceUrl(rawSourceUrl)} target="_blank" rel="noreferrer">Open source</a>
                   <a href={downloadUrl(stream.downloadUrl)}>Download</a>
                 </div>
               </div>
             )}
           </>
+        ) : streamError ? (
+          <div className="playerFallback">
+            <strong>Stream could not be prepared.</strong>
+            <span>{streamError}</span>
+            <div className="fallbackActions">
+              <a href={sourceUrl(rawSourceUrl)} target="_blank" rel="noreferrer">Open raw link</a>
+              <a href={downloadUrl(rawSourceUrl)}>Try download</a>
+            </div>
+          </div>
         ) : (
           <button
             className="startBtn"
