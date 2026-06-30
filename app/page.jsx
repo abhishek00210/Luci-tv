@@ -2,13 +2,16 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-const sections = [
+const librarySections = [
   { label: 'Trending', type: 'trending', group: 'Library', path: '/api/trending', flat: true },
-  { label: 'Movies', type: 'movies', group: 'Library', path: '/api/movies' },
-  { label: 'Series', type: 'series', group: 'Library', path: '/api/series' },
-  { label: 'Anime', type: 'anime', group: 'Library', path: '/api/anime' },
-  { label: 'Bolly Movies', type: 'bollywood_movies', group: 'Library', path: '/api/bollywood_movies' },
-  { label: 'Bolly Series', type: 'bollywood_series', group: 'Library', path: '/api/bollywood_series' },
+  { label: 'Movies', type: 'movies', group: 'Library', path: '/api/movies', collection: 'movies' },
+  { label: 'Series', type: 'series', group: 'Library', path: '/api/series', collection: 'series' },
+  { label: 'Anime', type: 'anime', group: 'Library', path: '/api/anime', collection: 'anime' },
+  { label: 'Bolly Movies', type: 'bollywood_movies', group: 'Library', path: '/api/bollywood_movies', collection: 'bollywood_movies' },
+  { label: 'Bolly Series', type: 'bollywood_series', group: 'Library', path: '/api/bollywood_series', collection: 'bollywood_series' },
+];
+
+const platformSections = [
   { label: 'Netflix', type: 'netflix', group: 'Platforms', path: '/rpc/platform/netflix', flat: true },
   { label: 'Amazon', type: 'amazon', group: 'Platforms', path: '/rpc/platform/amazon', flat: true },
   { label: 'Disney+', type: 'disney', group: 'Platforms', path: '/rpc/platform/disney', flat: true },
@@ -19,26 +22,35 @@ const sections = [
   { label: 'SonyLIV', type: 'sony', group: 'Platforms', path: '/rpc/platform/sony', flat: true },
   { label: 'Hulu', type: 'hulu', group: 'Platforms', path: '/rpc/platform/hulu', flat: true },
   { label: 'HBO', type: 'hbo', group: 'Platforms', path: '/rpc/platform/hbo', flat: true },
-  { label: 'Dual Audio', type: 'dual_audio', group: 'Categories', path: '/api/movies', category: 'Dual Audio Movies' },
-  { label: 'Action', type: 'action', group: 'Categories', path: '/api/movies', category: 'Action' },
-  { label: 'Comedy', type: 'comedy', group: 'Categories', path: '/api/movies', category: 'Comedy' },
-  { label: 'Romance', type: 'romance', group: 'Categories', path: '/api/movies', category: 'Romance' },
-  { label: 'Family', type: 'family', group: 'Categories', path: '/api/movies', category: 'Family' },
-  { label: 'Horror', type: 'horror', group: 'Categories', path: '/api/movies', category: 'Horror' },
-  { label: 'Thriller', type: 'thriller', group: 'Categories', path: '/api/movies', category: 'Thriller' },
-  { label: 'WEB-DL', type: 'webdl', group: 'Quality', path: '/api/movies', category: 'WEB-DL' },
-  { label: 'HDRip', type: 'hdrip', group: 'Quality', path: '/api/movies', category: 'HDRip' },
-  { label: '1080p', type: '1080p', group: 'Quality', path: '/api/movies', category: '1080p' },
-  { label: '720p', type: '720p', group: 'Quality', path: '/api/movies', category: '720p' },
-  { label: '480p', type: '480p', group: 'Quality', path: '/api/movies', category: '480p' },
-  { label: '2026', type: 'year_2026', group: 'Quality', path: '/api/movies', category: '2026' },
 ];
 
-const navGroups = ['Library', 'Platforms', 'Categories', 'Quality'].map((group) => ({
-  label: group,
-  sections: sections.filter((section) => section.group === group),
-}));
+const categorySections = [
+  { label: 'Dual Audio', type: 'dual_audio', group: 'Categories', path: '/api/movies', collection: 'movies', category: 'Dual Audio Movies' },
+  { label: 'Action', type: 'action', group: 'Categories', path: '/api/movies', collection: 'movies', category: 'Action' },
+  { label: 'Comedy', type: 'comedy', group: 'Categories', path: '/api/movies', collection: 'movies', category: 'Comedy' },
+  { label: 'Romance', type: 'romance', group: 'Categories', path: '/api/movies', collection: 'movies', category: 'Romance' },
+  { label: 'Family', type: 'family', group: 'Categories', path: '/api/movies', collection: 'movies', category: 'Family' },
+  { label: 'Horror', type: 'horror', group: 'Categories', path: '/api/movies', collection: 'movies', category: 'Horror' },
+  { label: 'Thriller', type: 'thriller', group: 'Categories', path: '/api/movies', collection: 'movies', category: 'Thriller' },
+];
 
+const qualitySections = [
+  { label: 'WEB-DL', type: 'webdl', group: 'Quality', path: '/api/movies', collection: 'movies', category: 'WEB-DL' },
+  { label: 'HDRip', type: 'hdrip', group: 'Quality', path: '/api/movies', collection: 'movies', category: 'HDRip' },
+  { label: '1080p', type: '1080p', group: 'Quality', path: '/api/movies', collection: 'movies', category: '1080p' },
+  { label: '720p', type: '720p', group: 'Quality', path: '/api/movies', collection: 'movies', category: '720p' },
+  { label: '480p', type: '480p', group: 'Quality', path: '/api/movies', collection: 'movies', category: '480p' },
+  { label: '2026', type: 'year_2026', group: 'Quality', path: '/api/movies', collection: 'movies', category: '2026' },
+];
+
+const sections = [...librarySections, ...platformSections, ...categorySections, ...qualitySections];
+const navGroups = [
+  { label: 'Library', sections: librarySections },
+  { label: 'Platforms', sections: platformSections },
+  { label: 'Categories', sections: categorySections },
+  { label: 'Quality', sections: qualitySections },
+];
+const globalSearchSections = [...librarySections.filter((item) => item.type !== 'trending'), ...platformSections];
 const HICINE_ORIGIN = 'https://api.hicine.info';
 const apiOrigin = process.env.NEXT_PUBLIC_API_ORIGIN || HICINE_ORIGIN;
 
@@ -52,6 +64,8 @@ function decodeText(value = '') {
     .replace(/&#039;/g, "'")
     .replace(/&amp;/g, '&')
     .replace(/&quot;/g, '"')
+    .replace(/â/g, '-')
+    .replace(/â/g, "'")
     .replace(/<[^>]*>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -64,8 +78,19 @@ function getYear(item) {
   return '';
 }
 
+function resolveCollection(item, fallbackType) {
+  const source = item.contentType || item.source_table || item.collection || fallbackType;
+  const aliases = {
+    hollywood_movies: 'movies',
+    hollywood_series: 'series',
+    bolly_movies: 'bollywood_movies',
+    bolly_series: 'bollywood_series',
+  };
+  return aliases[source] || source;
+}
+
 function normalizeItem(item, fallbackType) {
-  const contentType = item.contentType || item.source_table || fallbackType;
+  const contentType = resolveCollection(item, fallbackType);
   const image = item.featured_image || item.poster;
 
   return {
@@ -93,10 +118,7 @@ async function fetchJson(url, signal) {
     throw new Error(preview || `Request returned non-JSON response: ${res.status}`);
   }
 
-  if (!res.ok) {
-    throw new Error(data?.message || data?.error || `Request failed: ${res.status}`);
-  }
-
+  if (!res.ok) throw new Error(data?.message || data?.error || `Request failed: ${res.status}`);
   return data;
 }
 
@@ -166,17 +188,15 @@ function parseSeasons(item) {
   return seasons;
 }
 
-function buildSectionUrl(section, query) {
+function buildSectionUrl(section, query = '', limitOverride) {
   const params = new URLSearchParams();
   if (section.path.startsWith('/rpc/')) {
-    params.set('limit', '300');
+    params.set('limit', limitOverride || '300');
   } else {
     params.set('offset', '0');
-    params.set('limit', query ? '80' : '500');
+    params.set('limit', limitOverride || (query ? '80' : '60'));
   }
-  if (section.category) {
-    params.set('category', section.category);
-  }
+  if (section.category) params.set('category', section.category);
   if (query) {
     params.set('search', query);
     params.set('q', query);
@@ -214,58 +234,233 @@ async function resolveStream(download) {
   };
 }
 
+async function hashPassword(value) {
+  const encoded = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest('SHA-256', encoded);
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function recentKey(username) {
+  return `luci_recent_${username}`;
+}
+
+function getStoredUser() {
+  if (typeof window === 'undefined') return null;
+  const raw = localStorage.getItem('luci_current_user');
+  return raw ? JSON.parse(raw) : null;
+}
+
+function getRecent(username) {
+  if (!username) return [];
+  try {
+    return JSON.parse(localStorage.getItem(recentKey(username)) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function saveRecent(username, item) {
+  if (!username || !item?.id) return [];
+  const compact = {
+    id: item.id,
+    title: item.title,
+    image: item.image,
+    contentType: item.contentType,
+    year: item.year,
+    categories: item.categories,
+    overview: item.overview,
+    slug: item.slug,
+    watchedAt: Date.now(),
+  };
+  const next = [compact, ...getRecent(username).filter((entry) => entry.id !== item.id)].slice(0, 24);
+  localStorage.setItem(recentKey(username), JSON.stringify(next));
+  return next;
+}
+
+function dedupe(items) {
+  const seen = new Set();
+  const output = [];
+  for (const item of items) {
+    const key = `${item.contentType || 'item'}:${item.slug || item.id || item.title}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push(item);
+  }
+  return output;
+}
+
+async function globalSearch(query, signal) {
+  const lowered = query.toLowerCase();
+  const results = await Promise.allSettled(
+    globalSearchSections.map(async (section) => {
+      const payload = await fetchJson(buildSectionUrl(section, section.path.startsWith('/rpc/') ? '' : query, section.path.startsWith('/rpc/') ? '300' : '30'), signal);
+      const parsed = parseList(payload, section.collection || section.type).data;
+      const filtered = section.path.startsWith('/rpc/')
+        ? parsed.filter((item) => item.title.toLowerCase().includes(lowered))
+        : parsed;
+      return filtered.map((item) => ({ ...item, searchGroup: section.label }));
+    }),
+  );
+
+  return dedupe(results.flatMap((result) => (result.status === 'fulfilled' ? result.value : []))).slice(0, 120);
+}
+
+function AuthGate({ onAuth }) {
+  const [mode, setMode] = useState('signin');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [message, setMessage] = useState('');
+
+  async function submit(event) {
+    event.preventDefault();
+    const cleanName = username.trim().toLowerCase();
+    if (cleanName.length < 3 || password.length < 4) {
+      setMessage('Use at least 3 letters for ID and 4 characters for password.');
+      return;
+    }
+
+    const users = JSON.parse(localStorage.getItem('luci_users') || '{}');
+    if (mode === 'signup' && users[cleanName]) {
+      setMessage('This ID already exists. Sign in instead.');
+      return;
+    }
+    if (mode === 'signin' && !users[cleanName]) {
+      setMessage('No account found for this ID. Create one first.');
+      return;
+    }
+
+    const passwordHash = await hashPassword(password);
+    if (mode === 'signin' && users[cleanName].passwordHash !== passwordHash) {
+      setMessage('Password is incorrect.');
+      return;
+    }
+
+    const user = { username: cleanName, createdAt: users[cleanName]?.createdAt || Date.now() };
+    if (mode === 'signup') {
+      users[cleanName] = { ...user, passwordHash };
+      localStorage.setItem('luci_users', JSON.stringify(users));
+    }
+    localStorage.setItem('luci_current_user', JSON.stringify(user));
+    onAuth(user);
+  }
+
+  return (
+    <main className="authShell">
+      <div className="authBackdrop" />
+      <form className="authPanel" onSubmit={submit}>
+        <button className="authBrand" type="button">
+          LUCI<span>TV</span>
+        </button>
+        <h1>{mode === 'signup' ? 'Create your profile' : 'Sign in'}</h1>
+        <input value={username} onChange={(event) => setUsername(event.target.value)} placeholder="User ID" />
+        <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" type="password" />
+        {message && <p className="authMessage">{message}</p>}
+        <button className="authSubmit" type="submit">{mode === 'signup' ? 'Create account' : 'Sign in'}</button>
+        <button className="authSwitch" type="button" onClick={() => { setMode(mode === 'signup' ? 'signin' : 'signup'); setMessage(''); }}>
+          {mode === 'signup' ? 'Already have an ID? Sign in' : 'New here? Create an ID'}
+        </button>
+      </form>
+    </main>
+  );
+}
+
 function App() {
-  const [activeType, setActiveType] = useState('movies');
+  const [user, setUser] = useState(null);
+  const [activeType, setActiveType] = useState('trending');
   const [query, setQuery] = useState('');
   const [items, setItems] = useState([]);
+  const [homeRows, setHomeRows] = useState([]);
+  const [recent, setRecent] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [player, setPlayer] = useState(null);
+  const [heroItem, setHeroItem] = useState(null);
   const playerRef = useRef(null);
 
   const activeSection = useMemo(
     () => sections.find((section) => section.type === activeType) || sections[0],
     [activeType],
   );
+  const isSearching = query.trim().length > 0;
 
   useEffect(() => {
-    setActiveType(sessionStorage.getItem('luci_tab') || 'movies');
+    const stored = getStoredUser();
+    if (stored) {
+      setUser(stored);
+      setRecent(getRecent(stored.username).map((item) => normalizeItem(item, item.contentType)));
+    }
+    setActiveType(sessionStorage.getItem('luci_tab') || 'trending');
     setQuery(sessionStorage.getItem('luci_query') || '');
   }, []);
 
   useEffect(() => {
+    if (!user) return;
+    setRecent(getRecent(user.username).map((item) => normalizeItem(item, item.contentType)));
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       try {
         setLoading(true);
         setError('');
-        const payload = await fetchJson(buildSectionUrl(activeSection, query.trim()), controller.signal);
-        const parsed = parseList(payload, activeSection.type);
-        const filtered = query.trim()
-          ? parsed.data.filter((item) => item.title.toLowerCase().includes(query.trim().toLowerCase()))
-          : parsed.data;
-        setItems(filtered);
+        if (isSearching) {
+          const data = await globalSearch(query.trim(), controller.signal);
+          setItems(data);
+          setHomeRows([]);
+          if (data[0]) setHeroItem(data[0]);
+          return;
+        }
+
+        const payload = await fetchJson(buildSectionUrl(activeSection, ''), controller.signal);
+        const parsed = parseList(payload, activeSection.collection || activeSection.type);
+        setItems(parsed.data);
+        setHeroItem(parsed.data[0] || null);
+
+        if (activeType === 'trending') {
+          const rows = await Promise.all(
+            [librarySections[1], platformSections[0], categorySections[1], qualitySections[2]].map(async (section) => {
+              const rowPayload = await fetchJson(buildSectionUrl(section, '', '18'), controller.signal);
+              return {
+                title: section.label,
+                items: parseList(rowPayload, section.collection || section.type).data.slice(0, 18),
+              };
+            }),
+          );
+          setHomeRows(rows);
+        } else {
+          setHomeRows([]);
+        }
       } catch (loadError) {
         if (loadError.name !== 'AbortError') {
           setError(loadError.message);
           setItems([]);
+          setHomeRows([]);
         }
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
-    }, query.trim() ? 260 : 0);
+    }, isSearching ? 320 : 0);
 
     return () => {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [activeSection, query]);
+  }, [activeSection, activeType, isSearching, query, user]);
+
+  function logout() {
+    localStorage.removeItem('luci_current_user');
+    setUser(null);
+    setPlayer(null);
+    setQuery('');
+  }
 
   function goHome() {
-    setActiveType('movies');
+    setActiveType('trending');
     setQuery('');
     setPlayer(null);
-    sessionStorage.setItem('luci_tab', 'movies');
+    sessionStorage.setItem('luci_tab', 'trending');
     sessionStorage.removeItem('luci_query');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -273,7 +468,9 @@ function App() {
   function changeTab(type) {
     setActiveType(type);
     setPlayer(null);
+    setQuery('');
     sessionStorage.setItem('luci_tab', type);
+    sessionStorage.removeItem('luci_query');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -283,16 +480,14 @@ function App() {
   }
 
   async function openItem(item) {
-    const normalized = normalizeItem(item, item.contentType || activeSection.type);
+    const normalized = normalizeItem(item, item.contentType || activeSection.collection || activeSection.type);
     setPlayer({ item: normalized, detail: normalized, loading: true, stream: null });
+    setHeroItem(normalized);
 
-    setTimeout(() => {
-      playerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 80);
+    setTimeout(() => playerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
 
     try {
-      const detailPath = detailUrl(normalized.contentType, normalized.slug);
-      const payload = await fetchJson(detailPath);
+      const payload = normalized.slug && normalized.contentType ? await fetchJson(detailUrl(normalized.contentType, normalized.slug)) : normalized;
       const detail = normalizeItem({ ...normalized, ...(payload.data || payload) }, normalized.contentType);
       setPlayer({ item: normalized, detail, loading: false, stream: null });
     } catch {
@@ -300,19 +495,18 @@ function App() {
     }
   }
 
-  function closePlayer() {
-    setPlayer(null);
+  function rememberWatched(item) {
+    if (!user) return;
+    setRecent(saveRecent(user.username, item).map((entry) => normalizeItem(entry, entry.contentType)));
   }
 
   async function startStream(download) {
     setPlayer((current) => ({
       ...current,
-      stream: {
-        ...download,
-        resolving: true,
-      },
+      stream: { ...download, resolving: true },
       streamError: '',
     }));
+    if (player?.detail) rememberWatched(player.detail);
 
     try {
       const resolved = await resolveStream(download);
@@ -320,32 +514,31 @@ function App() {
     } catch (streamError) {
       setPlayer((current) => ({
         ...current,
-        stream: {
-          ...download,
-          resolving: false,
-        },
+        stream: { ...download, resolving: false },
         streamError: streamError.message,
       }));
     }
   }
 
+  if (!user) return <AuthGate onAuth={setUser} />;
+
+  const hero = heroItem || items[0];
+  const visibleRows = [
+    ...(recent.length ? [{ title: 'Recent watched', items: recent }] : []),
+    ...homeRows,
+  ];
+
   return (
     <div className="app">
       <header className="header">
-        <button className="logo" onClick={goHome} aria-label="Go to home">
-          <span className="logoAccent">Luci</span><span className="logoDot">·</span>TV
-        </button>
+        <button className="logo" onClick={goHome} aria-label="Go to home">LUCI<span>TV</span></button>
         <nav className="tabs" aria-label="Categories">
           {navGroups.map((group) => (
             <div className="tabGroup" key={group.label}>
               <span className="tabGroupLabel">{group.label}</span>
               <div className="tabGroupButtons">
                 {group.sections.map((section) => (
-                  <button
-                    key={section.type}
-                    className={`tab ${activeType === section.type ? 'active' : ''}`}
-                    onClick={() => changeTab(section.type)}
-                  >
+                  <button key={section.type} className={`tab ${activeType === section.type && !isSearching ? 'active' : ''}`} onClick={() => changeTab(section.type)}>
                     {section.label}
                   </button>
                 ))}
@@ -353,45 +546,49 @@ function App() {
             </div>
           ))}
         </nav>
+        <div className="userArea">
+          <span>{user.username}</span>
+          <button onClick={logout}>Logout</button>
+        </div>
       </header>
+
+      {hero && <Hero item={hero} onPlay={openItem} />}
 
       <main className="main">
         <form className="searchRow" onSubmit={submitSearch}>
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={`Search ${activeSection.label.toLowerCase()}...`}
-            className="input"
-          />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search all movies, series and platforms..." className="input" />
           <button type="submit" className="btn">Search</button>
         </form>
 
         {player && (
           <div ref={playerRef}>
-            <Player
-              player={player}
-              onClose={closePlayer}
-              onStream={startStream}
-            />
+            <Player player={player} onClose={() => setPlayer(null)} onStream={startStream} />
           </div>
         )}
 
-        <p className="sectionLabel">{query.trim() ? 'Results' : activeSection.label}</p>
-        <MediaGrid
-          items={items}
-          loading={loading}
-          error={error}
-          selectedId={player?.item.id}
-          onSelect={openItem}
-        />
-      </main>
+        {visibleRows.map((row) => <MediaRail key={row.title} title={row.title} items={row.items} onSelect={openItem} selectedId={player?.item.id} />)}
 
-      <footer className="footer">
-        <p className="footerText">
-          &copy; {new Date().getFullYear()} Luci-TV | Digital Entertainment Democratized
-        </p>
-      </footer>
+        <p className="sectionLabel">{isSearching ? `Global results for "${query.trim()}"` : activeSection.label}</p>
+        <MediaGrid items={items} loading={loading} error={error} selectedId={player?.item.id} onSelect={openItem} />
+      </main>
     </div>
+  );
+}
+
+function Hero({ item, onPlay }) {
+  return (
+    <section className="hero" style={{ backgroundImage: item.image ? `url(${item.image})` : undefined }}>
+      <div className="heroShade" />
+      <div className="heroContent">
+        <span className="heroKicker">Now on Luci-TV</span>
+        <h1>{item.title}</h1>
+        <p>{item.overview || item.categories || 'Browse, stream and continue from your recent watched list.'}</p>
+        <div className="heroActions">
+          <button onClick={() => onPlay(item)}>Play</button>
+          {item.year && <span>{item.year}</span>}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -522,6 +719,24 @@ function DownloadRow({ download, onStream, active = false, compact = false }) {
         <a href={downloadUrl(download.downloadUrl)}>Download</a>
       </div>
     </div>
+  );
+}
+
+function MediaRail({ title, items, selectedId, onSelect }) {
+  if (!items.length) return null;
+
+  return (
+    <section className="rail">
+      <div className="railHeader">
+        <h2>{title}</h2>
+        <span>{items.length} titles</span>
+      </div>
+      <div className="railTrack">
+        {items.map((item) => (
+          <MediaCard item={item} selected={item.id === selectedId} onClick={onSelect} key={`${title}-${item.id}`} />
+        ))}
+      </div>
+    </section>
   );
 }
 
