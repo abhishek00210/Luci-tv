@@ -470,6 +470,7 @@ button {
 }
 
 .poster {
+  position: relative;
   width: 100%;
   aspect-ratio: 2 / 3;
   display: grid;
@@ -495,6 +496,22 @@ button {
   color: #777;
   font-size: 28px;
   font-weight: 900;
+}
+
+.continueTag {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  max-width: calc(100% - 16px);
+  overflow: hidden;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(229, 9, 20, 0.92);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .info {
@@ -581,6 +598,11 @@ button {
 
 .badge {
   color: #d7d7d7;
+}
+
+.resume {
+  background: rgba(229, 9, 20, 0.2);
+  color: #fff;
 }
 
 .overview {

@@ -146,6 +146,7 @@ function parseMovieLinks(linksString) {
         downloadUrl: parts[0] || '',
         quality: parts[7] || parts.slice(1, -1).join(' ') || 'Download option',
         size: parts[8] || parts.at(-1) || '',
+        mediaKind: 'movie',
       };
     })
     .filter((item) => item.downloadUrl && item.downloadUrl !== 'empty');
@@ -184,11 +185,58 @@ function parseSeasons(item) {
   const seasons = [];
   for (let i = 1; i <= 15; i += 1) {
     const parsed = parseSeason(item[`season_${i}`]);
-    if (parsed?.episodes.length) seasons.push({ seasonNumber: i, ...parsed });
+    if (parsed?.episodes.length) {
+      seasons.push({
+        seasonNumber: i,
+        ...parsed,
+        episodes: parsed.episodes.map((episode) => ({
+          ...episode,
+          qualities: episode.qualities.map((quality) => ({
+            ...quality,
+            mediaKind: 'episode',
+            seasonNumber: i,
+            episodeLabel: episode.label,
+          })),
+        })),
+      });
+    }
   }
   const zip = parseSeason(item.season_zip);
-  if (zip?.episodes.length) seasons.push({ seasonNumber: 'ZIP', ...zip });
+  if (zip?.episodes.length) {
+    seasons.push({
+      seasonNumber: 'ZIP',
+      ...zip,
+      episodes: zip.episodes.map((episode) => ({
+        ...episode,
+        qualities: episode.qualities.map((quality) => ({
+          ...quality,
+          mediaKind: 'season_zip',
+          seasonNumber: 'ZIP',
+          episodeLabel: episode.label,
+        })),
+      })),
+    });
+  }
   return seasons;
+}
+
+function getPlayableDownloads(detail) {
+  return [
+    ...parseMovieLinks(detail.links || detail.cloudlinks),
+    ...parseSeasons(detail).flatMap((season) => season.episodes.flatMap((episode) => episode.qualities)),
+  ];
+}
+
+function findResumeDownload(detail, resume) {
+  if (!resume?.downloadUrl) return null;
+  const downloads = getPlayableDownloads(detail);
+  return downloads.find((download) => download.downloadUrl === resume.downloadUrl)
+    || downloads.find((download) => (
+      String(download.seasonNumber || '') === String(resume.seasonNumber || '')
+      && (download.episodeLabel || '') === (resume.episodeLabel || '')
+      && (download.quality || '') === (resume.quality || '')
+    ))
+    || null;
 }
 
 function buildSectionUrl(section, query = '', limitOverride) {
@@ -218,6 +266,13 @@ function downloadUrl(rawUrl) {
 
 function sourceUrl(rawUrl) {
   return rawUrl;
+}
+
+function formatResumeTime(totalSeconds = 0) {
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = String(safeSeconds % 60).padStart(2, '0');
+  return `${minutes}:${seconds}`;
 }
 
 async function resolveStream(download) {
@@ -276,6 +331,7 @@ function saveRecent(username, item) {
     overview: item.overview,
     slug: item.slug,
     url_slug: item.slug,
+    resume: item.resume || null,
     watchedAt: Date.now(),
   };
   const next = [compact, ...getRecent(username).filter((entry) => entry.id !== item.id)].slice(0, 24);
@@ -496,34 +552,82 @@ function App() {
       const payload = normalized.slug && normalized.contentType ? await fetchJson(detailUrl(normalized.contentType, normalized.slug)) : normalized;
       const detail = normalizeItem({ ...normalized, ...(payload.data || payload) }, normalized.contentType);
       setPlayer({ item: normalized, detail, loading: false, stream: null });
+
+      const resumeDownload = findResumeDownload(detail, normalized.resume);
+      if (resumeDownload) {
+        startStream(resumeDownload, {
+          detail,
+          resumeAt: normalized.resume?.time || 0,
+          shouldRemember: false,
+        });
+      }
     } catch {
       setPlayer({ item: normalized, detail: normalized, loading: false, stream: null });
     }
   }
 
-  function rememberWatched(item) {
+  function rememberWatched(item, resume = item.resume || null) {
     if (!user) return;
-    setRecent(saveRecent(user.username, item).map((entry) => normalizeItem(entry, entry.contentType)));
+    setRecent(saveRecent(user.username, { ...item, resume }).map((entry) => normalizeItem(entry, entry.contentType)));
   }
 
-  async function startStream(download) {
+  async function startStream(download, options = {}) {
+    const resumeAt = options.resumeAt || 0;
+    const streamSeed = { ...download, resumeAt, resolving: true };
     setPlayer((current) => ({
       ...current,
-      stream: { ...download, resolving: true },
+      stream: streamSeed,
       streamError: '',
     }));
-    if (player?.detail) rememberWatched(player.detail);
+    const detail = options.detail || player?.detail;
+    if (detail && options.shouldRemember !== false) {
+      rememberWatched(detail, {
+        downloadUrl: download.downloadUrl,
+        quality: download.quality,
+        size: download.size,
+        mediaKind: download.mediaKind || 'movie',
+        seasonNumber: download.seasonNumber || null,
+        episodeLabel: download.episodeLabel || '',
+        time: resumeAt,
+        duration: 0,
+        updatedAt: Date.now(),
+      });
+    }
 
     try {
       const resolved = await resolveStream(download);
-      setPlayer((current) => ({ ...current, stream: resolved, streamError: '' }));
+      setPlayer((current) => ({ ...current, stream: { ...resolved, resumeAt }, streamError: '' }));
     } catch (streamError) {
       setPlayer((current) => ({
         ...current,
-        stream: { ...download, resolving: false },
+        stream: { ...download, resumeAt, resolving: false },
         streamError: streamError.message,
       }));
     }
+  }
+
+  function updateProgress(detail, stream, time, duration) {
+    if (!user || !detail || !stream?.downloadUrl) return;
+    const resume = {
+      downloadUrl: stream.downloadUrl,
+      quality: stream.quality,
+      size: stream.size,
+      mediaKind: stream.mediaKind || 'movie',
+      seasonNumber: stream.seasonNumber || null,
+      episodeLabel: stream.episodeLabel || '',
+      time: Math.max(0, Math.floor(time || 0)),
+      duration: Math.max(0, Math.floor(duration || 0)),
+      updatedAt: Date.now(),
+    };
+    setRecent(saveRecent(user.username, { ...detail, resume }).map((entry) => normalizeItem(entry, entry.contentType)));
+    setPlayer((current) => {
+      if (!current?.detail?.id || current.detail.id !== detail.id) return current;
+      return {
+        ...current,
+        detail: { ...current.detail, resume },
+        item: { ...current.item, resume },
+      };
+    });
   }
 
   if (!user) return <AuthGate onAuth={setUser} />;
@@ -568,7 +672,7 @@ function App() {
 
         {player && (
           <div ref={playerRef}>
-            <Player player={player} onClose={() => setPlayer(null)} onStream={startStream} />
+            <Player player={player} onClose={() => setPlayer(null)} onStream={startStream} onProgress={updateProgress} />
           </div>
         )}
 
@@ -598,17 +702,20 @@ function Hero({ item, onPlay }) {
   );
 }
 
-function Player({ player, onClose, onStream }) {
+function Player({ player, onClose, onStream, onProgress }) {
   const { detail, loading, stream, streamError } = player;
   const [streamFailed, setStreamFailed] = useState(false);
+  const progressTick = useRef(0);
   const downloads = parseMovieLinks(detail.links || detail.cloudlinks);
   const seasons = parseSeasons(detail);
   const firstStream = downloads[0] || seasons[0]?.episodes[0]?.qualities[0] || null;
   const activeStreamUrl = stream?.resolvedUrl || '';
   const rawSourceUrl = stream?.downloadUrl || '';
+  const resume = detail.resume;
 
   useEffect(() => {
     setStreamFailed(false);
+    progressTick.current = 0;
   }, [stream?.downloadUrl]);
 
   return (
@@ -622,6 +729,7 @@ function Player({ player, onClose, onStream }) {
           {detail.year && <span className="pill">{detail.year}</span>}
           {detail.contentType && <span className="pill gold">{detail.contentType.replace('_', ' ')}</span>}
           {detail.categories && <span className="pill badge">{detail.categories.split(',').slice(0, 2).join(', ')}</span>}
+          {resume?.time > 8 && <span className="pill resume">Resume {resume.episodeLabel || resume.quality} at {formatResumeTime(resume.time)}</span>}
         </div>
         {detail.overview && <p className="overview">{detail.overview.slice(0, 240)}</p>}
       </div>
@@ -639,6 +747,18 @@ function Player({ player, onClose, onStream }) {
               controls
               autoPlay
               playsInline
+              onLoadedMetadata={(event) => {
+                if (stream.resumeAt > 8 && stream.resumeAt < event.currentTarget.duration - 5) {
+                  event.currentTarget.currentTime = stream.resumeAt;
+                }
+              }}
+              onTimeUpdate={(event) => {
+                const now = Date.now();
+                if (now - progressTick.current < 5000) return;
+                progressTick.current = now;
+                onProgress(detail, stream, event.currentTarget.currentTime, event.currentTarget.duration);
+              }}
+              onPause={(event) => onProgress(detail, stream, event.currentTarget.currentTime, event.currentTarget.duration)}
               onError={() => setStreamFailed(true)}
             />
             {streamFailed && (
@@ -768,10 +888,15 @@ function MediaGrid({ items, loading, error, selectedId, onSelect }) {
 }
 
 function MediaCard({ item, selected, onClick }) {
+  const resume = item.resume;
+
   return (
     <button className={`card ${selected ? 'selected' : ''}`} onClick={() => onClick(item)}>
       <div className="poster">
         {item.image ? <img src={item.image} alt={item.title} loading="lazy" /> : <div className="noPoster">{item.title.slice(0, 2)}</div>}
+        {resume?.time > 8 && (
+          <span className="continueTag">Continue {resume.episodeLabel || formatResumeTime(resume.time)}</span>
+        )}
       </div>
       <div className="info">
         {item.year && <span className="rating">{item.year}</span>}
