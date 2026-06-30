@@ -91,18 +91,21 @@ function resolveCollection(item, fallbackType) {
 
 function normalizeItem(item, fallbackType) {
   const contentType = resolveCollection(item, fallbackType);
-  const image = item.featured_image || item.poster;
+  const image = item.featured_image || item.poster || item.image;
+  const slug = item.url_slug || item.slug;
 
   return {
     ...item,
-    id: item._id || item.record_id || item.url_slug || item.title,
+    id: item._id || item.record_id || slug || item.title,
     title: decodeText(item.title || 'Untitled'),
     image,
+    featured_image: image,
     contentType,
     year: getYear(item),
     categories: decodeText(item.categories || ''),
     overview: decodeText(item.excerpt || item.content || item.categories || ''),
-    slug: item.url_slug,
+    slug,
+    url_slug: slug,
   };
 }
 
@@ -265,11 +268,14 @@ function saveRecent(username, item) {
     id: item.id,
     title: item.title,
     image: item.image,
+    featured_image: item.image,
+    poster: item.poster || null,
     contentType: item.contentType,
     year: item.year,
     categories: item.categories,
     overview: item.overview,
     slug: item.slug,
+    url_slug: item.slug,
     watchedAt: Date.now(),
   };
   const next = [compact, ...getRecent(username).filter((entry) => entry.id !== item.id)].slice(0, 24);
