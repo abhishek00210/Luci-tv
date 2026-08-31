@@ -7,8 +7,8 @@ const librarySections = [
   { label: 'Movies', type: 'movies', group: 'Library', path: '/api/movies', collection: 'movies' },
   { label: 'Series', type: 'series', group: 'Library', path: '/api/series', collection: 'series' },
   { label: 'Anime', type: 'anime', group: 'Library', path: '/api/anime', collection: 'anime' },
-  { label: 'Bolly Movies', type: 'bollywood_movies', group: 'Library', path: '/api/bollywood_movies', collection: 'bollywood_movies' },
-  { label: 'Bolly Series', type: 'bollywood_series', group: 'Library', path: '/api/bollywood_series', collection: 'bollywood_series' },
+  { label: 'Bolly Movies', type: 'bolly_movies', group: 'Library', path: '/api/bolly_movies', collection: 'bolly_movies' },
+  { label: 'Bolly Series', type: 'bolly_series', group: 'Library', path: '/api/bolly_series', collection: 'bolly_series' },
 ];
 
 const platformSections = [
@@ -50,12 +50,17 @@ const navGroups = [
   { label: 'Categories', sections: categorySections },
   { label: 'Quality', sections: qualitySections },
 ];
-const globalSearchSections = [...librarySections.filter((item) => item.type !== 'trending'), ...platformSections];
+const globalSearchSections = librarySections.filter((item) => item.type !== 'trending');
+const searchableCollections = librarySections.filter((item) => item.collection);
 const HICINE_ORIGIN = 'https://api.hicine.info';
 const apiOrigin = process.env.NEXT_PUBLIC_API_ORIGIN || HICINE_ORIGIN;
 
 function apiUrl(path) {
   if (/^https?:\/\//.test(path)) return path;
+  if (path.startsWith('/api/resolve-stream')) return path;
+  if (apiOrigin === HICINE_ORIGIN && (path.startsWith('/api/') || path.startsWith('/health'))) {
+    return `/api/hicine${path}`;
+  }
   return `${apiOrigin}${path}`;
 }
 
@@ -83,8 +88,8 @@ function resolveCollection(item, fallbackType) {
   const aliases = {
     hollywood_movies: 'movies',
     hollywood_series: 'series',
-    bolly_movies: 'bollywood_movies',
-    bolly_series: 'bollywood_series',
+    bollywood_movies: 'bolly_movies',
+    bollywood_series: 'bolly_series',
   };
   return aliases[source] || source;
 }
@@ -131,6 +136,12 @@ function parseList(payload, type) {
     data: rows.map((item) => normalizeItem(item, type)),
     pagination: payload.pagination || null,
   };
+}
+
+function itemMatchesCategory(item, category) {
+  if (!category) return true;
+  const haystack = `${item.categories || ''} ${item.title || ''}`.toLowerCase();
+  return haystack.includes(category.toLowerCase());
 }
 
 function parseMovieLinks(linksString) {
@@ -244,7 +255,7 @@ function buildSectionUrl(section, query = '', limitOverride) {
   if (section.path.startsWith('/rpc/')) {
     params.set('limit', limitOverride || '300');
   } else {
-    params.set('offset', '0');
+    params.set('page', '1');
     params.set('limit', limitOverride || (query ? '80' : '60'));
   }
   if (section.category) params.set('category', section.category);
@@ -253,6 +264,10 @@ function buildSectionUrl(section, query = '', limitOverride) {
     params.set('q', query);
   }
   return `${section.path}?${params.toString()}`;
+}
+
+function buildSearchUrl(query) {
+  return `/api/search/${encodeURIComponent(query)}`;
 }
 
 function detailUrl(contentType, slug) {
@@ -353,7 +368,10 @@ function dedupe(items) {
 
 async function globalSearch(query, signal) {
   const lowered = query.toLowerCase();
-  const results = await Promise.allSettled(
+  const directSearch = fetchJson(buildSearchUrl(query), signal)
+    .then((payload) => parseList(payload, 'search').data.map((item) => ({ ...item, searchGroup: 'All' })));
+
+  const bruteForceSearch = Promise.allSettled(
     globalSearchSections.map(async (section) => {
       const payload = await fetchJson(buildSectionUrl(section, section.path.startsWith('/rpc/') ? '' : query, section.path.startsWith('/rpc/') ? '300' : '30'), signal);
       const parsed = parseList(payload, section.collection || section.type).data;
@@ -364,7 +382,31 @@ async function globalSearch(query, signal) {
     }),
   );
 
-  return dedupe(results.flatMap((result) => (result.status === 'fulfilled' ? result.value : []))).slice(0, 120);
+  const [directResult, bruteForceResult] = await Promise.allSettled([directSearch, bruteForceSearch]);
+  const directItems = directResult.status === 'fulfilled' ? directResult.value : [];
+  const bruteForceItems = bruteForceResult.status === 'fulfilled'
+    ? bruteForceResult.value.flatMap((result) => (result.status === 'fulfilled' ? result.value : []))
+    : [];
+
+  return dedupe([...directItems, ...bruteForceItems]).slice(0, 160);
+}
+
+async function fetchSectionItems(section, signal, limitOverride) {
+  if (section.category && !section.forceSingleCollection) {
+    const results = await Promise.allSettled(
+      searchableCollections.map(async (collectionSection) => {
+        const payload = await fetchJson(buildSectionUrl(collectionSection, '', limitOverride || '80'), signal);
+        return parseList(payload, collectionSection.collection).data
+          .filter((item) => itemMatchesCategory(item, section.category));
+      }),
+    );
+
+    return dedupe(results.flatMap((result) => (result.status === 'fulfilled' ? result.value : [])));
+  }
+
+  const payload = await fetchJson(buildSectionUrl(section, '', limitOverride), signal);
+  return parseList(payload, section.collection || section.type).data
+    .filter((item) => itemMatchesCategory(item, section.category));
 }
 
 function AuthGate({ onAuth }) {
@@ -475,18 +517,16 @@ function App() {
           return;
         }
 
-        const payload = await fetchJson(buildSectionUrl(activeSection, ''), controller.signal);
-        const parsed = parseList(payload, activeSection.collection || activeSection.type);
-        setItems(parsed.data);
-        setHeroItem(parsed.data[0] || null);
+        const sectionItems = await fetchSectionItems(activeSection, controller.signal);
+        setItems(sectionItems);
+        setHeroItem(sectionItems[0] || null);
 
         if (activeType === 'trending') {
           const rows = await Promise.all(
-            [librarySections[1], platformSections[0], categorySections[1], qualitySections[2]].map(async (section) => {
-              const rowPayload = await fetchJson(buildSectionUrl(section, '', '18'), controller.signal);
+            [librarySections[1], librarySections[2], categorySections[1], qualitySections[2]].map(async (section) => {
               return {
                 title: section.label,
-                items: parseList(rowPayload, section.collection || section.type).data.slice(0, 18),
+                items: (await fetchSectionItems(section, controller.signal, '18')).slice(0, 18),
               };
             }),
           );
