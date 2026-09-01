@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 
 const DEFAULT_WORKER_ORIGIN =
   process.env.DOWNLOAD_WORKER_ORIGIN || 'https://polished-hall-486c.brandaq.workers.dev';
+const SERVER_PRIORITY = ['ten', 'hubcloud', 'gdrive', 'google', 'pixel'];
 
 function json(body, status = 200) {
   return Response.json(body, {
@@ -37,6 +38,54 @@ function getWorkerOrigin(rawUrl) {
   return DEFAULT_WORKER_ORIGIN;
 }
 
+function chooseServer(tokens, preferredServer = '') {
+  const tokenKeys = Object.keys(tokens);
+  if (preferredServer && tokens[preferredServer]) return preferredServer;
+
+  return SERVER_PRIORITY.find((server) => tokens[server]) || tokenKeys[0];
+}
+
+function unwrapUrl(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    const nestedLink = parsed.searchParams.get('link') || parsed.searchParams.get('url');
+    return nestedLink || rawUrl;
+  } catch {
+    return rawUrl;
+  }
+}
+
+async function resolveRedirects(rawUrl) {
+  let currentUrl = rawUrl;
+
+  for (let step = 0; step < 4; step += 1) {
+    const response = await fetch(currentUrl, {
+      cache: 'no-store',
+      method: 'HEAD',
+      redirect: 'manual',
+      headers: {
+        Accept: 'video/*,*/*;q=0.8',
+        Range: 'bytes=0-1',
+      },
+    });
+
+    const location = response.headers.get('location');
+    if (location && response.status >= 300 && response.status < 400) {
+      currentUrl = unwrapUrl(new URL(location, currentUrl).toString());
+      continue;
+    }
+
+    return {
+      downloadUrl: unwrapUrl(currentUrl),
+      contentType: response.headers.get('content-type') || '',
+      contentLength: response.headers.get('content-length') || '',
+      contentDisposition: response.headers.get('content-disposition') || '',
+    };
+  }
+
+  return { downloadUrl: unwrapUrl(currentUrl), contentType: '', contentLength: '', contentDisposition: '' };
+}
+
 async function resolveCdnUrl(rawUrl, preferredServer = '') {
   const vcloudUrl = extractVcloudUrl(rawUrl);
   const workerOrigin = getWorkerOrigin(rawUrl);
@@ -66,7 +115,7 @@ async function resolveCdnUrl(rawUrl, preferredServer = '') {
     });
   }
 
-  const server = preferredServer && tokens[preferredServer] ? preferredServer : tokenKeys[0];
+  const server = chooseServer(tokens, preferredServer);
   const { ts, sig } = tokens[server] || {};
 
   if (!ts || !sig) {
@@ -91,12 +140,22 @@ async function resolveCdnUrl(rawUrl, preferredServer = '') {
     });
   }
 
+  const direct = await resolveRedirects(downloadUrl).catch(() => ({
+    downloadUrl: unwrapUrl(downloadUrl),
+    contentType: '',
+    contentLength: '',
+    contentDisposition: '',
+  }));
+
   return {
     success: true,
     title: linksData.title || '',
     size: linksData.size || '',
     server,
-    downloadUrl,
+    downloadUrl: direct.downloadUrl,
+    contentType: direct.contentType,
+    contentLength: direct.contentLength,
+    contentDisposition: direct.contentDisposition,
     allServers: tokenKeys,
   };
 }
