@@ -34,6 +34,7 @@ body {
 
 button,
 input,
+select,
 a {
   font: inherit;
 }
@@ -343,10 +344,20 @@ button {
   transition: transform 180ms ease, background 180ms ease;
 }
 
+.heroActions .secondaryBtn {
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
 .heroActions button:hover,
 .btn:hover {
   background: #e6e6e6;
   transform: translateY(-1px);
+}
+
+.heroActions .secondaryBtn:hover {
+  background: rgba(255, 255, 255, 0.22);
 }
 
 .heroActions span {
@@ -365,6 +376,70 @@ button {
   gap: 10px;
   max-width: 860px;
   margin-bottom: 28px;
+}
+
+.filterBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  margin: -10px 0 28px;
+  padding-bottom: 4px;
+}
+
+.filterBar label,
+.filterStat {
+  display: grid;
+  gap: 5px;
+}
+
+.filterBar label span,
+.filterStat span {
+  color: var(--dim);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.filterStat {
+  min-width: 78px;
+  min-height: 44px;
+  justify-content: center;
+  padding: 6px 12px;
+  border-left: 3px solid var(--red);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.filterStat strong {
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.filterBar select,
+.filterBar button {
+  min-height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  outline: none;
+}
+
+.filterBar select {
+  min-width: 122px;
+  padding: 0 10px;
+}
+
+.filterBar button {
+  padding: 0 14px;
+  font-weight: 900;
+}
+
+.filterBar button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .input {
@@ -605,12 +680,50 @@ button {
   color: #fff;
 }
 
+.playable {
+  background: rgba(41, 171, 135, 0.22);
+  color: #c8fff1;
+}
+
+.blocked {
+  background: rgba(255, 177, 66, 0.18);
+  color: #ffd596;
+}
+
 .overview {
   max-width: 760px;
   margin-bottom: 16px;
   color: var(--muted);
   font-size: 14px;
   line-height: 1.6;
+}
+
+.metaActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.metaActions button,
+.playerTools button,
+.subtitleUpload {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.playerTools button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .playerBox {
@@ -677,6 +790,85 @@ button {
   line-height: 1.5;
 }
 
+.playerTools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0 0;
+}
+
+.toolGroup {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.toolGroup select,
+.toolGroup input {
+  min-height: 26px;
+  width: 74px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+  background: #050505;
+  color: #fff;
+  outline: none;
+}
+
+.toolGroup input {
+  width: 64px;
+  padding: 0 6px;
+}
+
+.toolGroup small {
+  color: var(--dim);
+  font-size: 11px;
+}
+
+.serverGroup {
+  min-height: 34px;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.serverGroup button {
+  min-height: 26px;
+  padding: 0 10px;
+}
+
+.serverGroup button.active {
+  background: #fff;
+  color: #050505;
+}
+
+.subtitleUpload {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.subtitleUpload input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
 .fallbackActions,
 .downloadActions {
   display: flex;
@@ -689,6 +881,7 @@ button {
 }
 
 .fallbackActions a,
+.fallbackActions button,
 .downloadActions a,
 .downloadActions button {
   min-height: 34px;
@@ -703,6 +896,11 @@ button {
   font-size: 12px;
   font-weight: 900;
   text-decoration: none;
+}
+
+.fallbackActions button {
+  background: var(--red);
+  color: #fff;
 }
 
 .downloadActions button {
@@ -749,6 +947,59 @@ button {
   margin-top: 4px;
   color: var(--muted);
   font-size: 12px;
+}
+
+.adminPanel {
+  margin: 0 0 30px;
+  padding: 16px;
+  border-left: 3px solid var(--red);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.adminEmpty {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.reportList {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.reportRow {
+  display: grid;
+  grid-template-columns: minmax(170px, 0.38fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.34);
+}
+
+.reportRow strong,
+.reportRow span {
+  display: block;
+}
+
+.reportRow strong {
+  color: #fff;
+  font-size: 13px;
+}
+
+.reportRow span,
+.reportRow p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.adminPanel > button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 4px;
+  background: #fff;
+  color: #050505;
+  font-weight: 900;
 }
 
 .seasonGroup {
@@ -811,7 +1062,8 @@ button {
 
   .searchRow,
   .downloadRow,
-  .episodeRow {
+  .episodeRow,
+  .reportRow {
     grid-template-columns: 1fr;
   }
 

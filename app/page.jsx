@@ -54,6 +54,8 @@ const globalSearchSections = librarySections.filter((item) => item.type !== 'tre
 const searchableCollections = librarySections.filter((item) => item.collection);
 const HICINE_ORIGIN = 'https://api.hicine.info';
 const apiOrigin = process.env.NEXT_PUBLIC_API_ORIGIN || HICINE_ORIGIN;
+const defaultFilters = { genre: '', year: '', quality: '', language: '' };
+const adminUsername = 'babu';
 
 function apiUrl(path) {
   if (/^https?:\/\//.test(path)) return path;
@@ -87,6 +89,31 @@ function getYear(item) {
   return '';
 }
 
+function fieldText(item) {
+  return `${item.title || ''} ${item.categories || ''} ${item.quality || ''}`.toLowerCase();
+}
+
+function getQualityHints(item) {
+  const text = `${item.quality || ''} ${item.links || ''} ${item.cloudlinks || ''}`.toLowerCase();
+  return ['2160p', '1080p', '720p', '480p', 'web-dl', 'hdrip', 'camrip', 'bluray']
+    .filter((quality) => text.includes(quality));
+}
+
+function getLanguageHints(item) {
+  const text = fieldText(item);
+  return ['hindi', 'english', 'dual audio', 'tamil', 'telugu', 'korean', 'japanese']
+    .filter((language) => text.includes(language));
+}
+
+function getFormatHint(item) {
+  const text = `${item.quality || ''} ${item.links || ''} ${item.cloudlinks || ''}`.toLowerCase();
+  if (text.includes('.mp4') || text.includes('mp4')) return 'MP4';
+  if (text.includes('.m3u8') || text.includes('hls')) return 'HLS';
+  if (text.includes('.webm')) return 'WebM';
+  if (text.includes('.mkv') || text.includes('x264') || text.includes('x265')) return 'MKV';
+  return '';
+}
+
 function resolveCollection(item, fallbackType) {
   const source = item.contentType || item.source_table || item.collection || fallbackType;
   const aliases = {
@@ -113,6 +140,9 @@ function normalizeItem(item, fallbackType) {
     year: getYear(item),
     categories: decodeText(item.categories || ''),
     overview: decodeText(item.excerpt || item.content || item.categories || ''),
+    qualityHints: getQualityHints(item),
+    languageHints: getLanguageHints(item),
+    formatHint: getFormatHint(item),
     slug,
     url_slug: slug,
   };
@@ -162,6 +192,7 @@ function parseMovieLinks(linksString) {
         quality: parts[7] || parts.slice(1, -1).join(' ') || 'Download option',
         size: parts[8] || parts.at(-1) || '',
         mediaKind: 'movie',
+        formatHint: getFormatHint({ quality: line, links: line }),
       };
     })
     .filter((item) => item.downloadUrl && item.downloadUrl !== 'empty');
@@ -186,6 +217,7 @@ function parseSeason(seasonString) {
           downloadUrl: parts[0]?.trim() || '',
           size: parts.length >= 3 ? parts.slice(1, -1).join(',').trim() : '',
           quality: parts.at(-1)?.trim() || 'Download',
+          formatHint: getFormatHint({ quality: block, links: block }),
         };
       })
       .filter((item) => item.downloadUrl && item.downloadUrl !== 'empty');
@@ -283,6 +315,45 @@ function downloadUrl(rawUrl) {
   return `/api/resolve-stream?url=${encodeURIComponent(rawUrl)}&redirect=true`;
 }
 
+function reportKey(username) {
+  return `luci_reports_${username}`;
+}
+
+function getReports(username) {
+  if (!username) return [];
+  try {
+    return JSON.parse(localStorage.getItem(reportKey(username)) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function saveReports(username, reports) {
+  localStorage.setItem(reportKey(username), JSON.stringify(reports));
+  return reports;
+}
+
+function applyFilters(list, filters) {
+  return list.filter((item) => {
+    const text = fieldText(item);
+    if (filters.genre && !text.includes(filters.genre.toLowerCase())) return false;
+    if (filters.year && item.year !== filters.year) return false;
+    if (filters.quality && !text.includes(filters.quality.toLowerCase())) return false;
+    if (filters.language && !text.includes(filters.language.toLowerCase())) return false;
+    return true;
+  });
+}
+
+function getFilterOptions(list) {
+  const years = [...new Set(list.map((item) => item.year).filter(Boolean))].sort((a, b) => b.localeCompare(a)).slice(0, 12);
+  return {
+    genres: ['Action', 'Comedy', 'Romance', 'Family', 'Horror', 'Thriller', 'Sci-Fi', 'Fantasy'],
+    years,
+    qualities: ['2160p', '1080p', '720p', '480p', 'WEB-DL', 'HDRip', 'CAMRip', 'BluRay'],
+    languages: ['Hindi', 'English', 'Dual Audio', 'Tamil', 'Telugu', 'Korean', 'Japanese'],
+  };
+}
+
 function sourceUrl(rawUrl) {
   return rawUrl;
 }
@@ -294,8 +365,47 @@ function formatResumeTime(totalSeconds = 0) {
   return `${minutes}:${seconds}`;
 }
 
-async function resolveStream(download) {
-  const response = await fetch(`/api/resolve-stream?url=${encodeURIComponent(download.downloadUrl)}`);
+function getVideoFormat(url = '') {
+  const cleanUrl = url.split('?')[0].toLowerCase();
+  if (cleanUrl.endsWith('.m3u8')) return 'HLS';
+  if (cleanUrl.endsWith('.mp4')) return 'MP4';
+  if (cleanUrl.endsWith('.mkv')) return 'MKV';
+  if (cleanUrl.endsWith('.webm')) return 'WebM';
+  if (cleanUrl.endsWith('.mov')) return 'MOV';
+  return 'Auto';
+}
+
+function parseSubtitleTime(value) {
+  const normalized = value.replace(',', '.');
+  const parts = normalized.split(':').map(Number);
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return 0;
+  return (parts[0] * 3600) + (parts[1] * 60) + parts[2];
+}
+
+function formatSubtitleTime(totalSeconds) {
+  const safeSeconds = Math.max(0, totalSeconds);
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const seconds = Math.floor(safeSeconds % 60);
+  const milliseconds = Math.round((safeSeconds - Math.floor(safeSeconds)) * 1000);
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`;
+}
+
+function buildSubtitleUrl(text, offsetSeconds = 0) {
+  const hasWebVttHeader = text.trimStart().startsWith('WEBVTT');
+  const body = text
+    .replace(/\r/g, '')
+    .replace(/(\d{2}:\d{2}:\d{2}[,.]\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2}[,.]\d{3})/g, (_, start, end) => (
+      `${formatSubtitleTime(parseSubtitleTime(start) + offsetSeconds)} --> ${formatSubtitleTime(parseSubtitleTime(end) + offsetSeconds)}`
+    ));
+  const normalized = hasWebVttHeader ? body : `WEBVTT\n\n${body.replace(/^\d+\n/gm, '')}`;
+  return URL.createObjectURL(new Blob([normalized], { type: 'text/vtt' }));
+}
+
+async function resolveStream(download, preferredServer = '') {
+  const params = new URLSearchParams({ url: download.downloadUrl });
+  if (preferredServer) params.set('server', preferredServer);
+  const response = await fetch(`/api/resolve-stream?${params.toString()}`);
   const data = await response.json();
 
   if (!response.ok || !data.success || !data.downloadUrl) {
@@ -308,6 +418,9 @@ async function resolveStream(download) {
     size: data.size || download.size,
     resolvedUrl: data.downloadUrl,
     server: data.server,
+    allServers: data.allServers || [],
+    contentType: data.contentType || '',
+    contentDisposition: data.contentDisposition || '',
   };
 }
 
@@ -321,23 +434,30 @@ function recentKey(username) {
   return `luci_recent_${username}`;
 }
 
+function watchlistKey(username) {
+  return `luci_watchlist_${username}`;
+}
+
+function historyKey(username) {
+  return `luci_history_${username}`;
+}
+
 function getStoredUser() {
   if (typeof window === 'undefined') return null;
   const raw = localStorage.getItem('luci_current_user');
   return raw ? JSON.parse(raw) : null;
 }
 
-function getRecent(username) {
+function readLibrary(key, username) {
   if (!username) return [];
   try {
-    return JSON.parse(localStorage.getItem(recentKey(username)) || '[]');
+    return JSON.parse(localStorage.getItem(key(username)) || '[]');
   } catch {
     return [];
   }
 }
 
-function saveRecent(username, item) {
-  if (!username || !item?.id) return [];
+function compactItem(item, extras = {}) {
   const compact = {
     id: item.id,
     title: item.title,
@@ -348,14 +468,46 @@ function saveRecent(username, item) {
     year: item.year,
     categories: item.categories,
     overview: item.overview,
+    formatHint: item.formatHint || '',
     slug: item.slug,
     url_slug: item.slug,
     resume: item.resume || null,
-    watchedAt: Date.now(),
+    ...extras,
   };
+  return compact;
+}
+
+function getRecent(username) {
+  return readLibrary(recentKey, username);
+}
+
+function getWatchlist(username) {
+  return readLibrary(watchlistKey, username);
+}
+
+function getHistory(username) {
+  return readLibrary(historyKey, username);
+}
+
+function saveRecent(username, item) {
+  if (!username || !item?.id) return [];
+  const compact = compactItem(item, { watchedAt: Date.now() });
   const next = [compact, ...getRecent(username).filter((entry) => entry.id !== item.id)].slice(0, 24);
   localStorage.setItem(recentKey(username), JSON.stringify(next));
   return next;
+}
+
+function saveHistory(username, item) {
+  if (!username || !item?.id) return [];
+  const compact = compactItem(item, { watchedAt: Date.now() });
+  const next = [compact, ...getHistory(username).filter((entry) => entry.id !== item.id)].slice(0, 80);
+  localStorage.setItem(historyKey(username), JSON.stringify(next));
+  return next;
+}
+
+function saveWatchlist(username, items) {
+  localStorage.setItem(watchlistKey(username), JSON.stringify(items));
+  return items;
 }
 
 function dedupe(items) {
@@ -479,6 +631,10 @@ function App() {
   const [items, setItems] = useState([]);
   const [homeRows, setHomeRows] = useState([]);
   const [recent, setRecent] = useState([]);
+  const [watchlist, setWatchlist] = useState([]);
+  const [history, setHistory] = useState([]);
+  const [filters, setFilters] = useState(defaultFilters);
+  const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [player, setPlayer] = useState(null);
@@ -490,12 +646,31 @@ function App() {
     [activeType],
   );
   const isSearching = query.trim().length > 0;
+  const filteredItems = useMemo(() => applyFilters(items, filters), [items, filters]);
+  const filterOptions = useMemo(() => getFilterOptions(items), [items]);
+  const similarItems = useMemo(() => {
+    if (!player?.detail) return [];
+    const terms = fieldText(player.detail).split(/\W+/).filter((term) => term.length > 4);
+    return dedupe([...items, ...homeRows.flatMap((row) => row.items), ...watchlist, ...history])
+      .filter((item) => item.id !== player.detail.id)
+      .map((item) => ({
+        item,
+        score: terms.reduce((total, term) => total + (fieldText(item).includes(term) ? 1 : 0), 0),
+      }))
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 12)
+      .map((entry) => entry.item);
+  }, [history, homeRows, items, player?.detail, watchlist]);
 
   useEffect(() => {
     const stored = getStoredUser();
     if (stored) {
       setUser(stored);
       setRecent(getRecent(stored.username).map((item) => normalizeItem(item, item.contentType)));
+      setWatchlist(getWatchlist(stored.username).map((item) => normalizeItem(item, item.contentType)));
+      setHistory(getHistory(stored.username).map((item) => normalizeItem(item, item.contentType)));
+      setReports(getReports(stored.username));
     }
     setActiveType(sessionStorage.getItem('luci_tab') || 'trending');
     setQuery(sessionStorage.getItem('luci_query') || '');
@@ -504,6 +679,9 @@ function App() {
   useEffect(() => {
     if (!user) return;
     setRecent(getRecent(user.username).map((item) => normalizeItem(item, item.contentType)));
+    setWatchlist(getWatchlist(user.username).map((item) => normalizeItem(item, item.contentType)));
+    setHistory(getHistory(user.username).map((item) => normalizeItem(item, item.contentType)));
+    setReports(getReports(user.username));
   }, [user]);
 
   useEffect(() => {
@@ -560,6 +738,11 @@ function App() {
     setUser(null);
     setPlayer(null);
     setQuery('');
+    setWatchlist([]);
+    setHistory([]);
+    setRecent([]);
+    setReports([]);
+    setFilters(defaultFilters);
   }
 
   function goHome() {
@@ -575,6 +758,7 @@ function App() {
     setActiveType(type);
     setPlayer(null);
     setQuery('');
+    setFilters(defaultFilters);
     sessionStorage.setItem('luci_tab', type);
     sessionStorage.removeItem('luci_query');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -612,7 +796,48 @@ function App() {
 
   function rememberWatched(item, resume = item.resume || null) {
     if (!user) return;
-    setRecent(saveRecent(user.username, { ...item, resume }).map((entry) => normalizeItem(entry, entry.contentType)));
+    const withResume = { ...item, resume };
+    setRecent(saveRecent(user.username, withResume).map((entry) => normalizeItem(entry, entry.contentType)));
+    setHistory(saveHistory(user.username, withResume).map((entry) => normalizeItem(entry, entry.contentType)));
+  }
+
+  function toggleWatchlist(item) {
+    if (!user || !item?.id) return;
+    const normalized = normalizeItem(item, item.contentType || activeSection.collection || activeSection.type);
+    const exists = watchlist.some((entry) => entry.id === normalized.id);
+    const next = exists
+      ? watchlist.filter((entry) => entry.id !== normalized.id)
+      : [normalizeItem(compactItem(normalized, { savedAt: Date.now() }), normalized.contentType), ...watchlist].slice(0, 80);
+    setWatchlist(saveWatchlist(user.username, next).map((entry) => normalizeItem(entry, entry.contentType)));
+  }
+
+  function changeFilter(key, value) {
+    setFilters((current) => ({ ...current, [key]: value }));
+  }
+
+  function clearFilters() {
+    setFilters(defaultFilters);
+  }
+
+  function reportBrokenStream(detail, stream, reason) {
+    if (!user || !detail) return;
+    const report = {
+      id: `${detail.id}-${Date.now()}`,
+      title: detail.title,
+      contentType: detail.contentType,
+      quality: stream?.quality || 'Unknown',
+      server: stream?.server || '',
+      reason,
+      url: stream?.downloadUrl || '',
+      resolvedUrl: stream?.resolvedUrl || '',
+      createdAt: new Date().toISOString(),
+    };
+    setReports(saveReports(user.username, [report, ...getReports(user.username)].slice(0, 60)));
+  }
+
+  function clearReports() {
+    if (!user) return;
+    setReports(saveReports(user.username, []));
   }
 
   async function startStream(download, options = {}) {
@@ -639,7 +864,7 @@ function App() {
     }
 
     try {
-      const resolved = await resolveStream(download);
+      const resolved = await resolveStream(download, options.preferredServer || download.server || '');
       setPlayer((current) => ({ ...current, stream: { ...resolved, resumeAt }, streamError: '' }));
     } catch (streamError) {
       setPlayer((current) => ({
@@ -664,6 +889,7 @@ function App() {
       updatedAt: Date.now(),
     };
     setRecent(saveRecent(user.username, { ...detail, resume }).map((entry) => normalizeItem(entry, entry.contentType)));
+    setHistory(saveHistory(user.username, { ...detail, resume }).map((entry) => normalizeItem(entry, entry.contentType)));
     setPlayer((current) => {
       if (!current?.detail?.id || current.detail.id !== detail.id) return current;
       return {
@@ -678,9 +904,12 @@ function App() {
 
   const hero = heroItem || items[0];
   const visibleRows = [
+    ...(watchlist.length ? [{ title: 'Watchlist', items: watchlist }] : []),
     ...(recent.length ? [{ title: 'Recent watched', items: recent }] : []),
+    ...(history.length ? [{ title: 'History', items: history }] : []),
     ...homeRows,
   ];
+  const currentInWatchlist = player?.detail ? watchlist.some((item) => item.id === player.detail.id) : false;
 
   return (
     <div className="app">
@@ -706,7 +935,7 @@ function App() {
         </div>
       </header>
 
-      {hero && <Hero item={hero} onPlay={openItem} />}
+      {hero && <Hero item={hero} onPlay={openItem} onWatchlist={toggleWatchlist} inWatchlist={watchlist.some((item) => item.id === hero.id)} />}
 
       <main className="main">
         <form className="searchRow" onSubmit={submitSearch}>
@@ -714,22 +943,36 @@ function App() {
           <button type="submit" className="btn">Search</button>
         </form>
 
+        <FilterBar filters={filters} options={filterOptions} total={items.length} shown={filteredItems.length} onChange={changeFilter} onClear={clearFilters} />
+
         {player && (
           <div ref={playerRef}>
-            <Player player={player} onClose={() => setPlayer(null)} onStream={startStream} onProgress={updateProgress} />
+            <Player
+              player={player}
+              onClose={() => setPlayer(null)}
+              onStream={startStream}
+              onProgress={updateProgress}
+              onWatchlist={toggleWatchlist}
+              inWatchlist={currentInWatchlist}
+              onReport={reportBrokenStream}
+              similarItems={similarItems}
+              onSelectSimilar={openItem}
+            />
           </div>
         )}
 
         {visibleRows.map((row) => <MediaRail key={row.title} title={row.title} items={row.items} onSelect={openItem} selectedId={player?.item.id} />)}
 
+        {user.username === adminUsername && <AdminPanel reports={reports} onClear={clearReports} />}
+
         <p className="sectionLabel">{isSearching ? `Global results for "${query.trim()}"` : activeSection.label}</p>
-        <MediaGrid items={items} loading={loading} error={error} selectedId={player?.item.id} onSelect={openItem} />
+        <MediaGrid items={filteredItems} loading={loading} error={error} selectedId={player?.item.id} onSelect={openItem} />
       </main>
     </div>
   );
 }
 
-function Hero({ item, onPlay }) {
+function Hero({ item, onPlay, onWatchlist, inWatchlist }) {
   return (
     <section className="hero" style={{ backgroundImage: item.image ? `url(${item.image})` : undefined }}>
       <div className="heroShade" />
@@ -739,6 +982,7 @@ function Hero({ item, onPlay }) {
         <p>{item.overview || item.categories || 'Browse, stream and continue from your recent watched list.'}</p>
         <div className="heroActions">
           <button onClick={() => onPlay(item)}>Play</button>
+          <button className="secondaryBtn" onClick={() => onWatchlist(item)}>{inWatchlist ? 'Saved' : 'Watchlist'}</button>
           {item.year && <span>{item.year}</span>}
         </div>
       </div>
@@ -746,21 +990,113 @@ function Hero({ item, onPlay }) {
   );
 }
 
-function Player({ player, onClose, onStream, onProgress }) {
+function FilterBar({ filters, options, total, shown, onChange, onClear }) {
+  const hasFilters = Object.values(filters).some(Boolean);
+
+  return (
+    <section className="filterBar" aria-label="Filters">
+      <div className="filterStat">
+        <strong>{shown}</strong>
+        <span>{shown === total ? 'titles' : `of ${total}`}</span>
+      </div>
+      <label>
+        <span>Genre</span>
+        <select value={filters.genre} onChange={(event) => onChange('genre', event.target.value)}>
+          <option value="">All</option>
+          {options.genres.map((option) => <option value={option} key={option}>{option}</option>)}
+        </select>
+      </label>
+      <label>
+        <span>Year</span>
+        <select value={filters.year} onChange={(event) => onChange('year', event.target.value)}>
+          <option value="">All</option>
+          {options.years.map((option) => <option value={option} key={option}>{option}</option>)}
+        </select>
+      </label>
+      <label>
+        <span>Quality</span>
+        <select value={filters.quality} onChange={(event) => onChange('quality', event.target.value)}>
+          <option value="">All</option>
+          {options.qualities.map((option) => <option value={option} key={option}>{option}</option>)}
+        </select>
+      </label>
+      <label>
+        <span>Language</span>
+        <select value={filters.language} onChange={(event) => onChange('language', event.target.value)}>
+          <option value="">All</option>
+          {options.languages.map((option) => <option value={option} key={option}>{option}</option>)}
+        </select>
+      </label>
+      <button type="button" onClick={onClear} disabled={!hasFilters}>Clear</button>
+    </section>
+  );
+}
+
+function Player({ player, onClose, onStream, onProgress, onWatchlist, inWatchlist, onReport, similarItems, onSelectSimilar }) {
   const { detail, loading, stream, streamError } = player;
   const [streamFailed, setStreamFailed] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [subtitle, setSubtitle] = useState(null);
+  const [subtitleOffset, setSubtitleOffset] = useState(0);
   const progressTick = useRef(0);
+  const videoRef = useRef(null);
   const downloads = parseMovieLinks(detail.links || detail.cloudlinks);
   const seasons = parseSeasons(detail);
   const firstStream = downloads[0] || seasons[0]?.episodes[0]?.qualities[0] || null;
   const activeStreamUrl = stream?.resolvedUrl || '';
   const rawSourceUrl = stream?.downloadUrl || '';
   const resume = detail.resume;
+  const format = stream?.contentType?.includes('mkv') ? 'MKV' : getVideoFormat(activeStreamUrl || rawSourceUrl || stream?.contentDisposition || stream?.formatHint);
+  const browserPlayable = !stream || ['MP4', 'HLS', 'WebM', 'Auto'].includes(format);
+  const playbackMessage = format === 'MKV'
+    ? 'This source is an MKV file. Most browsers cannot play MKV directly, so use download/VLC or try another server.'
+    : 'The source blocked browser playback or returned a file the browser cannot decode.';
 
   useEffect(() => {
     setStreamFailed(false);
     progressTick.current = 0;
   }, [stream?.downloadUrl]);
+
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.playbackRate = playbackRate;
+  }, [playbackRate, activeStreamUrl]);
+
+  useEffect(() => () => {
+    if (subtitle?.url) URL.revokeObjectURL(subtitle.url);
+  }, [subtitle?.url]);
+
+  async function loadSubtitle(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    if (subtitle?.url) URL.revokeObjectURL(subtitle.url);
+    setSubtitle({
+      name: file.name,
+      raw: text,
+      url: buildSubtitleUrl(text, subtitleOffset),
+    });
+  }
+
+  function changeSubtitleOffset(value) {
+    const nextOffset = Number(value);
+    setSubtitleOffset(nextOffset);
+    if (!subtitle?.raw) return;
+    if (subtitle.url) URL.revokeObjectURL(subtitle.url);
+    setSubtitle({ ...subtitle, url: buildSubtitleUrl(subtitle.raw, nextOffset) });
+  }
+
+  async function enterPictureInPicture() {
+    if (!videoRef.current || !document.pictureInPictureEnabled) return;
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      } else {
+        await videoRef.current.requestPictureInPicture();
+      }
+    } catch {
+      setStreamFailed(true);
+    }
+  }
 
   return (
     <section className="playerWrap">
@@ -773,9 +1109,14 @@ function Player({ player, onClose, onStream, onProgress }) {
           {detail.year && <span className="pill">{detail.year}</span>}
           {detail.contentType && <span className="pill gold">{detail.contentType.replace('_', ' ')}</span>}
           {detail.categories && <span className="pill badge">{detail.categories.split(',').slice(0, 2).join(', ')}</span>}
+          {detail.formatHint && <span className={`pill ${detail.formatHint === 'MP4' ? 'playable' : 'badge'}`}>{detail.formatHint} source</span>}
+          {stream && <span className={`pill ${browserPlayable ? 'playable' : 'blocked'}`}>{format} stream</span>}
           {resume?.time > 8 && <span className="pill resume">Resume {resume.episodeLabel || resume.quality} at {formatResumeTime(resume.time)}</span>}
         </div>
         {detail.overview && <p className="overview">{detail.overview.slice(0, 240)}</p>}
+        <div className="metaActions">
+          <button type="button" onClick={() => onWatchlist(detail)}>{inWatchlist ? 'Remove from watchlist' : 'Add to watchlist'}</button>
+        </div>
       </div>
 
       <div className="playerBox" style={{ backgroundImage: stream ? undefined : `url(${detail.image})` }}>
@@ -787,6 +1128,7 @@ function Player({ player, onClose, onStream, onProgress }) {
         ) : stream && activeStreamUrl ? (
           <>
             <video
+              ref={videoRef}
               src={activeStreamUrl}
               controls
               autoPlay
@@ -804,14 +1146,17 @@ function Player({ player, onClose, onStream, onProgress }) {
               }}
               onPause={(event) => onProgress(detail, stream, event.currentTarget.currentTime, event.currentTarget.duration)}
               onError={() => setStreamFailed(true)}
-            />
+            >
+              {subtitle?.url && <track key={subtitle.url} src={subtitle.url} kind="subtitles" srcLang="en" label={subtitle.name || 'Custom'} default />}
+            </video>
             {streamFailed && (
               <div className="playerFallback">
                 <strong>Browser playback is not available for this file.</strong>
-                <span>Try opening the resolved source directly, or download it to play in VLC/MX Player.</span>
+                <span>{playbackMessage}</span>
                 <div className="fallbackActions">
                   <a href={activeStreamUrl || sourceUrl(rawSourceUrl)} target="_blank" rel="noreferrer">Open source</a>
                   <a href={downloadUrl(stream.downloadUrl)}>Download</a>
+                  <button type="button" onClick={() => onReport(detail, stream, playbackMessage)}>Report link</button>
                 </div>
               </div>
             )}
@@ -836,6 +1181,40 @@ function Player({ player, onClose, onStream, onProgress }) {
           </button>
         )}
       </div>
+
+      <section className="playerTools">
+        <div className="toolGroup">
+          <span>Speed</span>
+          <select value={playbackRate} onChange={(event) => setPlaybackRate(Number(event.target.value))}>
+            {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((speed) => <option value={speed} key={speed}>{speed}x</option>)}
+          </select>
+        </div>
+        <button type="button" onClick={enterPictureInPicture} disabled={!activeStreamUrl}>Picture in picture</button>
+        {stream?.allServers?.length > 1 && (
+          <div className="serverGroup">
+            <span>Servers</span>
+            {stream.allServers.map((server) => (
+              <button
+                type="button"
+                className={server === stream.server ? 'active' : ''}
+                onClick={() => onStream(stream, { preferredServer: server })}
+                key={server}
+              >
+                {server}
+              </button>
+            ))}
+          </div>
+        )}
+        <label className="subtitleUpload">
+          <span>{subtitle?.name || 'Custom subtitles'}</span>
+          <input type="file" accept=".vtt,.srt,text/vtt" onChange={loadSubtitle} />
+        </label>
+        <div className="toolGroup">
+          <span>Subtitle sync</span>
+          <input type="number" step="0.5" min="-30" max="30" value={subtitleOffset} onChange={(event) => changeSubtitleOffset(event.target.value)} />
+          <small>sec</small>
+        </div>
+      </section>
 
       {loading && <p className="empty">Loading full title details...</p>}
 
@@ -873,6 +1252,10 @@ function Player({ player, onClose, onStream, onProgress }) {
           </div>
         </section>
       )}
+
+      {!loading && Boolean(similarItems.length) && (
+        <MediaRail title="Similar titles" items={similarItems} selectedId={detail.id} onSelect={onSelectSimilar} />
+      )}
     </section>
   );
 }
@@ -882,13 +1265,42 @@ function DownloadRow({ download, onStream, active = false, compact = false }) {
     <div className={`downloadRow ${compact ? 'compact' : ''} ${active ? 'selected' : ''}`}>
       <div className="downloadMeta">
         <strong>{download.quality}</strong>
-        <span>{download.size || 'Available'}</span>
+        <span>{download.size || 'Available'}{download.formatHint ? ` · ${download.formatHint}` : ''}</span>
       </div>
       <div className="downloadActions">
         <button type="button" onClick={() => onStream(download)}>Stream</button>
         <a href={downloadUrl(download.downloadUrl)}>Download</a>
       </div>
     </div>
+  );
+}
+
+function AdminPanel({ reports, onClear }) {
+  return (
+    <section className="adminPanel">
+      <div className="railHeader">
+        <h2>Admin tools</h2>
+        <span>{reports.length} broken stream reports</span>
+      </div>
+      {!reports.length ? (
+        <p className="adminEmpty">No broken links reported.</p>
+      ) : (
+        <>
+          <div className="reportList">
+            {reports.slice(0, 8).map((report) => (
+              <div className="reportRow" key={report.id}>
+                <div>
+                  <strong>{report.title}</strong>
+                  <span>{report.quality} {report.server ? `via ${report.server}` : ''}</span>
+                </div>
+                <p>{report.reason}</p>
+              </div>
+            ))}
+          </div>
+          <button type="button" onClick={onClear}>Clear reports</button>
+        </>
+      )}
+    </section>
   );
 }
 
