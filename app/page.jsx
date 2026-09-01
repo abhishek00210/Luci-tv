@@ -58,7 +58,7 @@ const apiOrigin = process.env.NEXT_PUBLIC_API_ORIGIN || HICINE_ORIGIN;
 function apiUrl(path) {
   if (/^https?:\/\//.test(path)) return path;
   if (path.startsWith('/api/resolve-stream')) return path;
-  if (apiOrigin === HICINE_ORIGIN && (path.startsWith('/api/') || path.startsWith('/health'))) {
+  if (apiOrigin === HICINE_ORIGIN && (path.startsWith('/api/') || path.startsWith('/rpc/') || path.startsWith('/health'))) {
     return `/api/hicine${path}`;
   }
   return `${apiOrigin}${path}`;
