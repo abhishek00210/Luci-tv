@@ -59,7 +59,11 @@ function apiUrl(path) {
   if (/^https?:\/\//.test(path)) return path;
   if (path.startsWith('/api/resolve-stream')) return path;
   if (apiOrigin === HICINE_ORIGIN && (path.startsWith('/api/') || path.startsWith('/rpc/') || path.startsWith('/health'))) {
-    return `/api/hicine${path}`;
+    const [pathname, query = ''] = path.split('?');
+    const endpoint = pathname.replace(/^\/+/, '').replace(/^api\/+/, '');
+    const params = new URLSearchParams(query);
+    params.set('endpoint', endpoint);
+    return `/api/proxy?${params.toString()}`;
   }
   return `${apiOrigin}${path}`;
 }
