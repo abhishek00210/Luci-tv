@@ -4,6 +4,8 @@ export const dynamic = 'force-dynamic';
 const HICINE_ORIGIN = process.env.PRODUCTION_API_URL || 'https://api.hicine.info';
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = process.env.NODE_TLS_REJECT_UNAUTHORIZED || '0';
 
+const HICINE_UNAVAILABLE_MESSAGE = 'Hicine API is unavailable right now. api.hicine.info is closing requests or returning an expired-domain page.';
+
 function json(body, status = 200) {
   return Response.json(body, {
     status,
@@ -53,6 +55,18 @@ async function fetchHicine(upstreamUrl) {
   const text = await response.text();
 
   try {
+    if (/parklogic|openprovider-expired|<html/i.test(text)) {
+      return {
+        ok: false,
+        status: 502,
+        data: {
+          error: 'Hicine API unavailable',
+          message: HICINE_UNAVAILABLE_MESSAGE,
+          upstream: upstreamUrl.toString(),
+        },
+      };
+    }
+
     return {
       ok: response.ok,
       status: response.status,
@@ -93,10 +107,13 @@ export async function GET(request) {
     const upstream = await fetchHicine(upstreamUrl);
     return json(upstream.data, upstream.ok ? 200 : upstream.status);
   } catch (error) {
+    const upstreamMessage = error.cause?.message || error.message || '';
     return json(
       {
-        error: 'Proxy request failed',
-        message: error.cause?.message || error.message || 'Unable to fetch api.hicine.info.',
+        error: 'Hicine API unavailable',
+        message: /other side closed|empty reply|terminated|fetch failed|timeout/i.test(upstreamMessage)
+          ? HICINE_UNAVAILABLE_MESSAGE
+          : upstreamMessage || 'Unable to fetch api.hicine.info.',
       },
       502,
     );
