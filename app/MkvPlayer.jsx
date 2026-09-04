@@ -96,6 +96,7 @@ export default function MkvPlayer({
       title={title}
       controls=""
       autoplay=""
+      muted=""
       playsinline=""
       preload="metadata"
       engine="wasm"
