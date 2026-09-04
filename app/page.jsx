@@ -419,8 +419,12 @@ async function resolveStream(download, preferredServer = '') {
     resolvedUrl: data.downloadUrl,
     server: data.server,
     allServers: data.allServers || [],
+    checkedServers: data.checkedServers || [],
     contentType: data.contentType || '',
     contentDisposition: data.contentDisposition || '',
+    format: data.format || '',
+    browserPlayable: data.browserPlayable !== false,
+    warning: data.warning || '',
   };
 }
 
@@ -1046,11 +1050,11 @@ function Player({ player, onClose, onStream, onProgress, onWatchlist, inWatchlis
   const activeStreamUrl = stream?.resolvedUrl || '';
   const rawSourceUrl = stream?.downloadUrl || '';
   const resume = detail.resume;
-  const format = stream?.contentType?.includes('mkv') ? 'MKV' : getVideoFormat(activeStreamUrl || rawSourceUrl || stream?.contentDisposition || stream?.formatHint);
-  const browserPlayable = !stream || ['MP4', 'HLS', 'WebM', 'Auto'].includes(format);
-  const playbackMessage = format === 'MKV'
+  const format = stream?.format?.toUpperCase() || (stream?.contentType?.includes('mkv') ? 'MKV' : getVideoFormat(activeStreamUrl || rawSourceUrl || stream?.contentDisposition || stream?.formatHint));
+  const browserPlayable = stream ? stream.browserPlayable !== false : true;
+  const playbackMessage = stream?.warning || (format === 'MKV'
     ? 'This source is an MKV file. Most browsers cannot play MKV directly, so use download/VLC or try another server.'
-    : 'The source blocked browser playback or returned a file the browser cannot decode.';
+    : 'The source blocked browser playback or returned a file the browser cannot decode.');
 
   useEffect(() => {
     setStreamFailed(false);
@@ -1125,7 +1129,7 @@ function Player({ player, onClose, onStream, onProgress, onWatchlist, inWatchlis
             <strong>Preparing stream...</strong>
             <span>Resolving a fresh direct video link from the source.</span>
           </div>
-        ) : stream && activeStreamUrl ? (
+        ) : stream && activeStreamUrl && browserPlayable ? (
           <>
             <video
               ref={videoRef}
@@ -1161,6 +1165,16 @@ function Player({ player, onClose, onStream, onProgress, onWatchlist, inWatchlis
               </div>
             )}
           </>
+        ) : stream && activeStreamUrl ? (
+          <div className="playerFallback">
+            <strong>{format === 'MKV' ? 'MKV cannot play inside this browser.' : 'Browser playback is not available for this file.'}</strong>
+            <span>{playbackMessage}</span>
+            <div className="fallbackActions">
+              <a href={activeStreamUrl || sourceUrl(rawSourceUrl)} target="_blank" rel="noreferrer">Open source</a>
+              <a href={downloadUrl(stream.downloadUrl)}>Download</a>
+              <button type="button" onClick={() => onReport(detail, stream, playbackMessage)}>Report link</button>
+            </div>
+          </div>
         ) : streamError ? (
           <div className="playerFallback">
             <strong>Stream could not be prepared.</strong>
@@ -1202,6 +1216,15 @@ function Player({ player, onClose, onStream, onProgress, onWatchlist, inWatchlis
               >
                 {server}
               </button>
+            ))}
+          </div>
+        )}
+        {stream?.checkedServers?.length > 0 && (
+          <div className="serverStatus">
+            {stream.checkedServers.map((server) => (
+              <span className={server.browserPlayable ? 'ok' : 'bad'} key={`${server.server}-${server.format || server.error}`}>
+                {server.server}: {server.format ? server.format.toUpperCase() : 'failed'}
+              </span>
             ))}
           </div>
         )}

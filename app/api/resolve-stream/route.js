@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 const DEFAULT_WORKER_ORIGIN =
   process.env.DOWNLOAD_WORKER_ORIGIN || 'https://polished-hall-486c.brandaq.workers.dev';
 const SERVER_PRIORITY = ['ten', 'hubcloud', 'gdrive', 'google', 'pixel'];
+const BROWSER_FORMATS = new Set(['mp4', 'm4v', 'webm', 'm3u8']);
 
 function json(body, status = 200) {
   return Response.json(body, {
@@ -45,6 +46,16 @@ function chooseServer(tokens, preferredServer = '') {
   return SERVER_PRIORITY.find((server) => tokens[server]) || tokenKeys[0];
 }
 
+function orderedServers(tokens, preferredServer = '') {
+  const tokenKeys = Object.keys(tokens);
+  const ordered = [
+    preferredServer,
+    ...SERVER_PRIORITY,
+    ...tokenKeys,
+  ].filter(Boolean);
+  return [...new Set(ordered)].filter((server) => tokens[server]);
+}
+
 function unwrapUrl(rawUrl) {
   try {
     const parsed = new URL(rawUrl);
@@ -53,6 +64,26 @@ function unwrapUrl(rawUrl) {
   } catch {
     return rawUrl;
   }
+}
+
+function detectFormat({ downloadUrl = '', contentType = '', contentDisposition = '' }) {
+  const haystack = `${downloadUrl} ${contentType} ${contentDisposition}`.toLowerCase();
+  if (haystack.includes('mpegurl') || haystack.includes('.m3u8')) return 'm3u8';
+  if (haystack.includes('video/mp4') || haystack.includes('.mp4')) return 'mp4';
+  if (haystack.includes('video/webm') || haystack.includes('.webm')) return 'webm';
+  if (haystack.includes('video/x-matroska') || haystack.includes('video/mkv') || haystack.includes('.mkv')) return 'mkv';
+  if (haystack.includes('.m4v')) return 'm4v';
+  if (haystack.includes('video/')) return 'video';
+  return '';
+}
+
+function annotateDirect(direct) {
+  const format = detectFormat(direct);
+  return {
+    ...direct,
+    format,
+    browserPlayable: BROWSER_FORMATS.has(format),
+  };
 }
 
 async function resolveRedirects(rawUrl) {
@@ -75,15 +106,50 @@ async function resolveRedirects(rawUrl) {
       continue;
     }
 
-    return {
+    return annotateDirect({
       downloadUrl: unwrapUrl(currentUrl),
       contentType: response.headers.get('content-type') || '',
       contentLength: response.headers.get('content-length') || '',
       contentDisposition: response.headers.get('content-disposition') || '',
-    };
+    });
   }
 
-  return { downloadUrl: unwrapUrl(currentUrl), contentType: '', contentLength: '', contentDisposition: '' };
+  return annotateDirect({ downloadUrl: unwrapUrl(currentUrl), contentType: '', contentLength: '', contentDisposition: '' });
+}
+
+async function resolveServerUrl(workerOrigin, vcloudUrl, server, token) {
+  const { ts, sig } = token || {};
+
+  if (!ts || !sig) {
+    throw Object.assign(new Error('Selected server token is missing.'), { statusCode: 502 });
+  }
+
+  const goUrl =
+    `${workerOrigin}/go?type=${server}` +
+    `&vcloud=${encodeURIComponent(vcloudUrl)}` +
+    `&ts=${encodeURIComponent(ts)}` +
+    `&sig=${encodeURIComponent(sig)}`;
+
+  const goResponse = await fetch(goUrl, {
+    cache: 'no-store',
+    redirect: 'manual',
+  });
+  const downloadUrl = goResponse.headers.get('location');
+
+  if (!downloadUrl) {
+    throw Object.assign(new Error('Worker did not return a direct CDN URL.'), {
+      statusCode: 502,
+    });
+  }
+
+  return resolveRedirects(downloadUrl).catch(() => (
+    annotateDirect({
+      downloadUrl: unwrapUrl(downloadUrl),
+      contentType: '',
+      contentLength: '',
+      contentDisposition: '',
+    })
+  ));
 }
 
 async function resolveCdnUrl(rawUrl, preferredServer = '') {
@@ -115,48 +181,57 @@ async function resolveCdnUrl(rawUrl, preferredServer = '') {
     });
   }
 
-  const server = chooseServer(tokens, preferredServer);
-  const { ts, sig } = tokens[server] || {};
+  const candidates = [];
+  const serversToTry = preferredServer
+    ? [chooseServer(tokens, preferredServer)]
+    : orderedServers(tokens, preferredServer);
 
-  if (!ts || !sig) {
-    throw Object.assign(new Error('Selected server token is missing.'), { statusCode: 502 });
+  for (const server of serversToTry) {
+    try {
+      const direct = await resolveServerUrl(workerOrigin, vcloudUrl, server, tokens[server]);
+      candidates.push({ server, ...direct });
+      if (direct.browserPlayable) break;
+    } catch (error) {
+      candidates.push({
+        server,
+        error: error.message || 'Server failed.',
+        browserPlayable: false,
+        format: '',
+      });
+    }
   }
 
-  const goUrl =
-    `${workerOrigin}/go?type=${server}` +
-    `&vcloud=${encodeURIComponent(vcloudUrl)}` +
-    `&ts=${encodeURIComponent(ts)}` +
-    `&sig=${encodeURIComponent(sig)}`;
+  const selected = candidates.find((candidate) => candidate.browserPlayable)
+    || candidates.find((candidate) => candidate.downloadUrl)
+    || null;
 
-  const goResponse = await fetch(goUrl, {
-    cache: 'no-store',
-    redirect: 'manual',
-  });
-  const downloadUrl = goResponse.headers.get('location');
-
-  if (!downloadUrl) {
-    throw Object.assign(new Error('Worker did not return a direct CDN URL.'), {
+  if (!selected) {
+    throw Object.assign(new Error('No usable download URL was found on any server.'), {
       statusCode: 502,
     });
   }
-
-  const direct = await resolveRedirects(downloadUrl).catch(() => ({
-    downloadUrl: unwrapUrl(downloadUrl),
-    contentType: '',
-    contentLength: '',
-    contentDisposition: '',
-  }));
 
   return {
     success: true,
     title: linksData.title || '',
     size: linksData.size || '',
-    server,
-    downloadUrl: direct.downloadUrl,
-    contentType: direct.contentType,
-    contentLength: direct.contentLength,
-    contentDisposition: direct.contentDisposition,
+    server: selected.server,
+    downloadUrl: selected.downloadUrl,
+    contentType: selected.contentType || '',
+    contentLength: selected.contentLength || '',
+    contentDisposition: selected.contentDisposition || '',
+    format: selected.format || '',
+    browserPlayable: selected.browserPlayable,
     allServers: tokenKeys,
+    checkedServers: candidates.map((candidate) => ({
+      server: candidate.server,
+      format: candidate.format || '',
+      browserPlayable: Boolean(candidate.browserPlayable),
+      error: candidate.error || '',
+    })),
+    warning: selected.browserPlayable
+      ? ''
+      : 'This file is not browser-playable. MKV files need VLC/MX Player or a server-side transcoder.',
   };
 }
 
