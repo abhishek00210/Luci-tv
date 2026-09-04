@@ -1,6 +1,17 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useRef, useState } from 'react';
+
+const MkvPlayer = dynamic(() => import('./MkvPlayer'), {
+  ssr: false,
+  loading: () => (
+    <div className="playerFallback">
+      <strong>Loading MKV player...</strong>
+      <span>Starting the open-source WebAssembly decoder.</span>
+    </div>
+  ),
+});
 
 const librarySections = [
   { label: 'Trending', type: 'trending', group: 'Library', path: '/api/trending', flat: true },
@@ -416,7 +427,7 @@ async function resolveStream(download, preferredServer = '') {
     ...download,
     title: data.title || download.quality,
     size: data.size || download.size,
-    resolvedUrl: data.downloadUrl,
+    resolvedUrl: data.streamUrl || data.downloadUrl,
     server: data.server,
     allServers: data.allServers || [],
     checkedServers: data.checkedServers || [],
@@ -424,6 +435,8 @@ async function resolveStream(download, preferredServer = '') {
     contentDisposition: data.contentDisposition || '',
     format: data.format || '',
     browserPlayable: data.browserPlayable !== false,
+    nativePlayable: data.nativePlayable !== false,
+    playbackEngine: data.playbackEngine || 'native',
     warning: data.warning || '',
   };
 }
@@ -1038,7 +1051,7 @@ function FilterBar({ filters, options, total, shown, onChange, onClear }) {
 
 function Player({ player, onClose, onStream, onProgress, onWatchlist, inWatchlist, onReport, similarItems, onSelectSimilar }) {
   const { detail, loading, stream, streamError } = player;
-  const [streamFailed, setStreamFailed] = useState(false);
+  const [playbackFailure, setPlaybackFailure] = useState('');
   const [playbackRate, setPlaybackRate] = useState(1);
   const [subtitle, setSubtitle] = useState(null);
   const [subtitleOffset, setSubtitleOffset] = useState(0);
@@ -1052,12 +1065,13 @@ function Player({ player, onClose, onStream, onProgress, onWatchlist, inWatchlis
   const resume = detail.resume;
   const format = stream?.format?.toUpperCase() || (stream?.contentType?.includes('mkv') ? 'MKV' : getVideoFormat(activeStreamUrl || rawSourceUrl || stream?.contentDisposition || stream?.formatHint));
   const browserPlayable = stream ? stream.browserPlayable !== false : true;
+  const useMkvPlayer = format === 'MKV' || stream?.playbackEngine === 'movi';
   const playbackMessage = stream?.warning || (format === 'MKV'
-    ? 'This source is an MKV file. Most browsers cannot play MKV directly, so use download/VLC or try another server.'
+    ? 'The open-source MKV decoder could not read this source. Try another server or open the file in VLC/MX Player.'
     : 'The source blocked browser playback or returned a file the browser cannot decode.');
 
   useEffect(() => {
-    setStreamFailed(false);
+    setPlaybackFailure('');
     progressTick.current = 0;
   }, [stream?.downloadUrl]);
 
@@ -1098,8 +1112,15 @@ function Player({ player, onClose, onStream, onProgress, onWatchlist, inWatchlis
         await videoRef.current.requestPictureInPicture();
       }
     } catch {
-      setStreamFailed(true);
+      setPlaybackFailure('Picture in picture is not available in this browser.');
     }
+  }
+
+  function trackProgress(currentTime, duration) {
+    const now = Date.now();
+    if (now - progressTick.current < 5000) return;
+    progressTick.current = now;
+    onProgress(detail, stream, currentTime, duration);
   }
 
   return (
@@ -1114,7 +1135,7 @@ function Player({ player, onClose, onStream, onProgress, onWatchlist, inWatchlis
           {detail.contentType && <span className="pill gold">{detail.contentType.replace('_', ' ')}</span>}
           {detail.categories && <span className="pill badge">{detail.categories.split(',').slice(0, 2).join(', ')}</span>}
           {detail.formatHint && <span className={`pill ${detail.formatHint === 'MP4' ? 'playable' : 'badge'}`}>{detail.formatHint} source</span>}
-          {stream && <span className={`pill ${browserPlayable ? 'playable' : 'blocked'}`}>{format} stream</span>}
+          {stream && <span className={`pill ${browserPlayable ? 'playable' : 'blocked'}`}>{format}{useMkvPlayer ? ' / WASM' : ''} stream</span>}
           {resume?.time > 8 && <span className="pill resume">Resume {resume.episodeLabel || resume.quality} at {formatResumeTime(resume.time)}</span>}
         </div>
         {detail.overview && <p className="overview">{detail.overview.slice(0, 240)}</p>}
@@ -1131,43 +1152,54 @@ function Player({ player, onClose, onStream, onProgress, onWatchlist, inWatchlis
           </div>
         ) : stream && activeStreamUrl && browserPlayable ? (
           <>
-            <video
-              ref={videoRef}
-              src={activeStreamUrl}
-              controls
-              autoPlay
-              playsInline
-              onLoadedMetadata={(event) => {
-                if (stream.resumeAt > 8 && stream.resumeAt < event.currentTarget.duration - 5) {
-                  event.currentTarget.currentTime = stream.resumeAt;
-                }
-              }}
-              onTimeUpdate={(event) => {
-                const now = Date.now();
-                if (now - progressTick.current < 5000) return;
-                progressTick.current = now;
-                onProgress(detail, stream, event.currentTarget.currentTime, event.currentTarget.duration);
-              }}
-              onPause={(event) => onProgress(detail, stream, event.currentTarget.currentTime, event.currentTarget.duration)}
-              onError={() => setStreamFailed(true)}
-            >
-              {subtitle?.url && <track key={subtitle.url} src={subtitle.url} kind="subtitles" srcLang="en" label={subtitle.name || 'Custom'} default />}
-            </video>
-            {streamFailed && (
+            {useMkvPlayer ? (
+              <MkvPlayer
+                key={activeStreamUrl}
+                mediaRef={videoRef}
+                src={activeStreamUrl}
+                poster={detail.image}
+                title={detail.title}
+                resumeAt={stream.resumeAt}
+                playbackRate={playbackRate}
+                subtitle={subtitle}
+                onTimeUpdate={trackProgress}
+                onPause={(currentTime, duration) => onProgress(detail, stream, currentTime, duration)}
+                onFailure={setPlaybackFailure}
+              />
+            ) : (
+              <video
+                ref={videoRef}
+                src={activeStreamUrl}
+                controls
+                autoPlay
+                playsInline
+                onLoadedMetadata={(event) => {
+                  if (stream.resumeAt > 8 && stream.resumeAt < event.currentTarget.duration - 5) {
+                    event.currentTarget.currentTime = stream.resumeAt;
+                  }
+                }}
+                onTimeUpdate={(event) => trackProgress(event.currentTarget.currentTime, event.currentTarget.duration)}
+                onPause={(event) => onProgress(detail, stream, event.currentTarget.currentTime, event.currentTarget.duration)}
+                onError={() => setPlaybackFailure(playbackMessage)}
+              >
+                {subtitle?.url && <track key={subtitle.url} src={subtitle.url} kind="subtitles" srcLang="en" label={subtitle.name || 'Custom'} default />}
+              </video>
+            )}
+            {playbackFailure && (
               <div className="playerFallback">
-                <strong>Browser playback is not available for this file.</strong>
-                <span>{playbackMessage}</span>
+                <strong>Playback could not start.</strong>
+                <span>{playbackFailure}</span>
                 <div className="fallbackActions">
                   <a href={activeStreamUrl || sourceUrl(rawSourceUrl)} target="_blank" rel="noreferrer">Open source</a>
                   <a href={downloadUrl(stream.downloadUrl)}>Download</a>
-                  <button type="button" onClick={() => onReport(detail, stream, playbackMessage)}>Report link</button>
+                  <button type="button" onClick={() => onReport(detail, stream, playbackFailure)}>Report link</button>
                 </div>
               </div>
             )}
           </>
         ) : stream && activeStreamUrl ? (
           <div className="playerFallback">
-            <strong>{format === 'MKV' ? 'MKV cannot play inside this browser.' : 'Browser playback is not available for this file.'}</strong>
+            <strong>Browser playback is not available for this file.</strong>
             <span>{playbackMessage}</span>
             <div className="fallbackActions">
               <a href={activeStreamUrl || sourceUrl(rawSourceUrl)} target="_blank" rel="noreferrer">Open source</a>

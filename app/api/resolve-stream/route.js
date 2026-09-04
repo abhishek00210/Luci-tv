@@ -1,10 +1,13 @@
+import { createMediaProxyPath } from '../media/signing';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const DEFAULT_WORKER_ORIGIN =
   process.env.DOWNLOAD_WORKER_ORIGIN || 'https://polished-hall-486c.brandaq.workers.dev';
 const SERVER_PRIORITY = ['ten', 'hubcloud', 'gdrive', 'google', 'pixel'];
-const BROWSER_FORMATS = new Set(['mp4', 'm4v', 'webm', 'm3u8']);
+const NATIVE_BROWSER_FORMATS = new Set(['mp4', 'm4v', 'webm', 'm3u8']);
+const WASM_PLAYER_FORMATS = new Set(['mkv']);
 
 function json(body, status = 200) {
   return Response.json(body, {
@@ -79,10 +82,14 @@ function detectFormat({ downloadUrl = '', contentType = '', contentDisposition =
 
 function annotateDirect(direct) {
   const format = detectFormat(direct);
+  const nativePlayable = NATIVE_BROWSER_FORMATS.has(format);
+  const wasmPlayable = WASM_PLAYER_FORMATS.has(format);
   return {
     ...direct,
     format,
-    browserPlayable: BROWSER_FORMATS.has(format),
+    nativePlayable,
+    browserPlayable: nativePlayable || wasmPlayable,
+    playbackEngine: wasmPlayable ? 'movi' : 'native',
   };
 }
 
@@ -196,6 +203,8 @@ async function resolveCdnUrl(rawUrl, preferredServer = '') {
         server,
         error: error.message || 'Server failed.',
         browserPlayable: false,
+        nativePlayable: false,
+        playbackEngine: '',
         format: '',
       });
     }
@@ -222,16 +231,19 @@ async function resolveCdnUrl(rawUrl, preferredServer = '') {
     contentDisposition: selected.contentDisposition || '',
     format: selected.format || '',
     browserPlayable: selected.browserPlayable,
+    nativePlayable: selected.nativePlayable,
+    playbackEngine: selected.playbackEngine || 'native',
     allServers: tokenKeys,
     checkedServers: candidates.map((candidate) => ({
       server: candidate.server,
       format: candidate.format || '',
       browserPlayable: Boolean(candidate.browserPlayable),
+      playbackEngine: candidate.playbackEngine || '',
       error: candidate.error || '',
     })),
     warning: selected.browserPlayable
       ? ''
-      : 'This file is not browser-playable. MKV files need VLC/MX Player or a server-side transcoder.',
+      : 'This file format is not supported by the native or open-source browser players.',
   };
 }
 
@@ -258,7 +270,11 @@ export async function GET(request) {
       return Response.redirect(result.downloadUrl, 302);
     }
 
-    return json(result);
+    const streamUrl = result.playbackEngine === 'movi'
+      ? createMediaProxyPath(result.downloadUrl)
+      : result.downloadUrl;
+
+    return json({ ...result, streamUrl: streamUrl || result.downloadUrl });
   } catch (error) {
     return json(
       {
