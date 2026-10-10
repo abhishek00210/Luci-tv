@@ -270,6 +270,11 @@ button {
   color: #fff;
 }
 
+.userArea button.active {
+  border-color: var(--red);
+  background: var(--red);
+}
+
 .hero {
   position: relative;
   min-height: clamp(420px, 62vw, 680px);
@@ -985,16 +990,325 @@ button {
   font-size: 12px;
 }
 
-.adminPanel {
-  margin: 0 0 30px;
-  padding: 16px;
-  border-left: 3px solid var(--red);
-  background: rgba(255, 255, 255, 0.05);
+.adminWorkspace {
+  width: min(1480px, 100%);
+  margin: 0 auto;
+  animation: panelIn 260ms ease both;
 }
 
-.adminEmpty {
+.adminLoginWorkspace {
+  min-height: calc(100vh - 150px);
+}
+
+.adminTitleRow,
+.adminSectionHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.adminTitleRow {
+  padding: 8px 0 22px;
+  border-bottom: 1px solid var(--line);
+}
+
+.adminTitleRow h1 {
+  margin-top: 5px;
+  font-size: clamp(28px, 4vw, 44px);
+  letter-spacing: 0;
+}
+
+.adminTitleRow p,
+.adminPrivacyNote {
+  margin-top: 8px;
   color: var(--muted);
   font-size: 13px;
+  line-height: 1.5;
+}
+
+.adminKicker,
+.adminSectionHeading > div > span {
+  color: var(--red);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.adminTitleActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.adminPrimaryButton,
+.adminSecondaryButton {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 4px;
+  font-weight: 800;
+}
+
+.adminPrimaryButton {
+  border: 0;
+  background: var(--red);
+  color: #fff;
+}
+
+.adminSecondaryButton {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: #171717;
+  color: #fff;
+}
+
+.adminPrimaryButton:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.adminLogin {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 14px;
+  margin-top: 34px;
+}
+
+.adminLogin label {
+  display: grid;
+  gap: 6px;
+}
+
+.adminLogin label span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.adminLogin input,
+.adminToolbar > input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+  background: #111;
+  color: #fff;
+  outline: none;
+}
+
+.adminLogin input {
+  padding: 0 12px;
+}
+
+.adminLogin input:focus,
+.adminToolbar > input:focus {
+  border-color: #fff;
+}
+
+.adminError {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--red);
+  background: rgba(229, 9, 20, 0.12);
+  color: #ffc2c5;
+  font-size: 13px;
+}
+
+.adminStatus,
+.adminEmpty {
+  padding: 22px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.adminStats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 22px 0;
+  border-block: 1px solid var(--line);
+}
+
+.adminStats > div {
+  min-width: 0;
+  padding: 18px 20px;
+  border-right: 1px solid var(--line);
+}
+
+.adminStats > div:first-child {
+  padding-left: 0;
+}
+
+.adminStats > div:last-child {
+  border-right: 0;
+}
+
+.adminStats strong,
+.adminStats span {
+  display: block;
+}
+
+.adminStats strong {
+  font-size: 30px;
+  line-height: 1;
+}
+
+.adminStats span {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.adminToolbar {
+  display: grid;
+  grid-template-columns: minmax(240px, 560px) auto 1fr;
+  align-items: center;
+  gap: 12px;
+}
+
+.adminToolbar > input {
+  padding: 0 14px;
+}
+
+.adminToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #ddd;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.adminToggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--red);
+}
+
+.adminResultCount {
+  justify-self: end;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.adminPrivacyNote {
+  margin-bottom: 12px;
+}
+
+.adminTableWrap {
+  width: 100%;
+  overflow-x: auto;
+  border-block: 1px solid var(--line);
+}
+
+.adminTable {
+  width: 100%;
+  min-width: 920px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.adminTable th,
+.adminTable td {
+  padding: 13px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  text-align: left;
+  vertical-align: top;
+}
+
+.adminTable th {
+  color: #777;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.adminTable tbody tr {
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.adminTable tbody tr:hover,
+.adminTable tbody tr.selected {
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.adminTable tbody tr.selected td:first-child {
+  box-shadow: inset 3px 0 var(--red);
+}
+
+.adminTable td strong,
+.adminTable td span {
+  display: block;
+}
+
+.adminTable td strong {
+  color: #f4f4f4;
+  font-size: 12px;
+}
+
+.adminTable td span {
+  margin-top: 4px;
+  color: #858585;
+  font-size: 11px;
+}
+
+.adminTable code {
+  color: #ddd;
+  font-size: 11px;
+}
+
+.adminDetail,
+.adminReports {
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.adminSectionHeading {
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.adminSectionHeading h2 {
+  margin-top: 4px;
+  font-size: 19px;
+  letter-spacing: 0;
+}
+
+.adminSectionHeading > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.adminDetailGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--line);
+}
+
+.adminDetailGrid > div {
+  min-width: 0;
+  padding: 15px 16px 15px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.adminDetailGrid dt {
+  color: #777;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.adminDetailGrid dd {
+  overflow-wrap: anywhere;
+  margin-top: 6px;
+  color: #ddd;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .reportList {
@@ -1026,16 +1340,6 @@ button {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
-}
-
-.adminPanel > button {
-  min-height: 34px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 4px;
-  background: #fff;
-  color: #050505;
-  font-weight: 900;
 }
 
 .seasonGroup {
@@ -1080,6 +1384,10 @@ button {
   .userArea {
     justify-content: space-between;
   }
+
+  .adminDetailGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 680px) {
@@ -1115,5 +1423,39 @@ button {
   .downloadActions a,
   .downloadActions button {
     flex: 1;
+  }
+
+  .adminTitleRow,
+  .adminSectionHeading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .adminTitleActions {
+    justify-content: flex-start;
+  }
+
+  .adminStats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .adminStats > div:nth-child(2) {
+    border-right: 0;
+  }
+
+  .adminStats > div:first-child {
+    padding-left: 16px;
+  }
+
+  .adminToolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .adminResultCount {
+    justify-self: start;
+  }
+
+  .adminDetailGrid {
+    grid-template-columns: 1fr;
   }
 }

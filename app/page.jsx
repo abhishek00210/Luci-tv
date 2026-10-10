@@ -652,6 +652,7 @@ function App() {
   const [history, setHistory] = useState([]);
   const [filters, setFilters] = useState(defaultFilters);
   const [reports, setReports] = useState([]);
+  const [adminOpen, setAdminOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [player, setPlayer] = useState(null);
@@ -699,6 +700,37 @@ function App() {
     setWatchlist(getWatchlist(user.username).map((item) => normalizeItem(item, item.contentType)));
     setHistory(getHistory(user.username).map((item) => normalizeItem(item, item.contentType)));
     setReports(getReports(user.username));
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return undefined;
+
+    const recordPresence = () => {
+      fetch('/api/analytics/visit', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: user.username,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          language: navigator.language,
+          screen: { width: window.screen.width, height: window.screen.height },
+          path: window.location.pathname,
+        }),
+      }).catch(() => {});
+    };
+
+    recordPresence();
+    const interval = window.setInterval(recordPresence, 5 * 60 * 1000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') recordPresence();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [user]);
 
   useEffect(() => {
@@ -760,9 +792,11 @@ function App() {
     setRecent([]);
     setReports([]);
     setFilters(defaultFilters);
+    setAdminOpen(false);
   }
 
   function goHome() {
+    setAdminOpen(false);
     setActiveType('trending');
     setQuery('');
     setPlayer(null);
@@ -772,6 +806,7 @@ function App() {
   }
 
   function changeTab(type) {
+    setAdminOpen(false);
     setActiveType(type);
     setPlayer(null);
     setQuery('');
@@ -948,42 +983,49 @@ function App() {
         </nav>
         <div className="userArea">
           <span>{user.username}</span>
+          {user.username === adminUsername && (
+            <button className={adminOpen ? 'active' : ''} onClick={() => setAdminOpen((current) => !current)}>Admin</button>
+          )}
           <button onClick={logout}>Logout</button>
         </div>
       </header>
 
-      {hero && <Hero item={hero} onPlay={openItem} onWatchlist={toggleWatchlist} inWatchlist={watchlist.some((item) => item.id === hero.id)} />}
+      {!adminOpen && hero && <Hero item={hero} onPlay={openItem} onWatchlist={toggleWatchlist} inWatchlist={watchlist.some((item) => item.id === hero.id)} />}
 
       <main className="main">
-        <form className="searchRow" onSubmit={submitSearch}>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search all movies, series and platforms..." className="input" />
-          <button type="submit" className="btn">Search</button>
-        </form>
+        {adminOpen ? (
+          <AdminDashboard reports={reports} onClearReports={clearReports} onClose={() => setAdminOpen(false)} />
+        ) : (
+          <>
+            <form className="searchRow" onSubmit={submitSearch}>
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search all movies, series and platforms..." className="input" />
+              <button type="submit" className="btn">Search</button>
+            </form>
 
-        <FilterBar filters={filters} options={filterOptions} total={items.length} shown={filteredItems.length} onChange={changeFilter} onClear={clearFilters} />
+            <FilterBar filters={filters} options={filterOptions} total={items.length} shown={filteredItems.length} onChange={changeFilter} onClear={clearFilters} />
 
-        {player && (
-          <div ref={playerRef}>
-            <Player
-              player={player}
-              onClose={() => setPlayer(null)}
-              onStream={startStream}
-              onProgress={updateProgress}
-              onWatchlist={toggleWatchlist}
-              inWatchlist={currentInWatchlist}
-              onReport={reportBrokenStream}
-              similarItems={similarItems}
-              onSelectSimilar={openItem}
-            />
-          </div>
+            {player && (
+              <div ref={playerRef}>
+                <Player
+                  player={player}
+                  onClose={() => setPlayer(null)}
+                  onStream={startStream}
+                  onProgress={updateProgress}
+                  onWatchlist={toggleWatchlist}
+                  inWatchlist={currentInWatchlist}
+                  onReport={reportBrokenStream}
+                  similarItems={similarItems}
+                  onSelectSimilar={openItem}
+                />
+              </div>
+            )}
+
+            {visibleRows.map((row) => <MediaRail key={row.title} title={row.title} items={row.items} onSelect={openItem} selectedId={player?.item.id} />)}
+
+            <p className="sectionLabel">{isSearching ? `Global results for "${query.trim()}"` : activeSection.label}</p>
+            <MediaGrid items={filteredItems} loading={loading} error={error} selectedId={player?.item.id} onSelect={openItem} />
+          </>
         )}
-
-        {visibleRows.map((row) => <MediaRail key={row.title} title={row.title} items={row.items} onSelect={openItem} selectedId={player?.item.id} />)}
-
-        {user.username === adminUsername && <AdminPanel reports={reports} onClear={clearReports} />}
-
-        <p className="sectionLabel">{isSearching ? `Global results for "${query.trim()}"` : activeSection.label}</p>
-        <MediaGrid items={filteredItems} loading={loading} error={error} selectedId={player?.item.id} onSelect={openItem} />
       </main>
     </div>
   );
@@ -1330,31 +1372,248 @@ function DownloadRow({ download, onStream, active = false, compact = false }) {
   );
 }
 
-function AdminPanel({ reports, onClear }) {
-  return (
-    <section className="adminPanel">
-      <div className="railHeader">
-        <h2>Admin tools</h2>
-        <span>{reports.length} broken stream reports</span>
-      </div>
-      {!reports.length ? (
-        <p className="adminEmpty">No broken links reported.</p>
-      ) : (
-        <>
-          <div className="reportList">
-            {reports.slice(0, 8).map((report) => (
-              <div className="reportRow" key={report.id}>
-                <div>
-                  <strong>{report.title}</strong>
-                  <span>{report.quality} {report.server ? `via ${report.server}` : ''}</span>
-                </div>
-                <p>{report.reason}</p>
-              </div>
-            ))}
+function formatAdminDate(value) {
+  if (!value) return 'Unknown';
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value));
+}
+
+function visitorLocation(visitor) {
+  return [visitor.city, visitor.region, visitor.country].filter(Boolean).join(', ') || 'Location unavailable';
+}
+
+function AdminDashboard({ reports, onClearReports, onClose }) {
+  const [status, setStatus] = useState('checking');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [analytics, setAnalytics] = useState(null);
+  const [message, setMessage] = useState('');
+  const [query, setQuery] = useState('');
+  const [activeOnly, setActiveOnly] = useState(false);
+  const [selectedId, setSelectedId] = useState('');
+
+  async function loadAnalytics() {
+    setMessage('');
+    const response = await fetch('/api/admin/analytics', { credentials: 'same-origin', cache: 'no-store' });
+    if (response.status === 401) {
+      setStatus('signed-out');
+      setAnalytics(null);
+      return;
+    }
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Unable to load analytics.');
+    setAnalytics(data);
+    setStatus('ready');
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/admin/session', { credentials: 'same-origin', cache: 'no-store' })
+      .then((response) => {
+        if (!response.ok) throw new Error('signed-out');
+        return response.json();
+      })
+      .then(() => {
+        if (!cancelled) return loadAnalytics();
+        return null;
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        if (error.message !== 'signed-out') setMessage('Admin service is not configured yet.');
+        setStatus('signed-out');
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  async function signIn(event) {
+    event.preventDefault();
+    setStatus('signing-in');
+    setMessage('');
+    try {
+      const response = await fetch('/api/admin/session', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username.trim(), password }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Admin sign-in failed.');
+      setPassword('');
+      await loadAnalytics();
+    } catch (error) {
+      setMessage(error.message);
+      setStatus('signed-out');
+    }
+  }
+
+  async function signOut() {
+    await fetch('/api/admin/session', { method: 'DELETE', credentials: 'same-origin' });
+    setAnalytics(null);
+    setPassword('');
+    setStatus('signed-out');
+  }
+
+  const visitors = useMemo(() => {
+    const search = query.trim().toLowerCase();
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    return (analytics?.visitors || []).filter((visitor) => {
+      if (activeOnly && new Date(visitor.lastSeen).getTime() < cutoff) return false;
+      if (!search) return true;
+      return [visitor.username, visitor.ip, visitor.city, visitor.region, visitor.country, visitor.isp, visitor.browser, visitor.os]
+        .some((value) => String(value || '').toLowerCase().includes(search));
+    });
+  }, [activeOnly, analytics, query]);
+  const selected = visitors.find((visitor) => visitor.id === selectedId) || null;
+
+  if (status === 'checking') {
+    return <section className="adminWorkspace"><p className="adminStatus">Checking admin session...</p></section>;
+  }
+
+  if (status === 'signed-out' || status === 'signing-in') {
+    return (
+      <section className="adminWorkspace adminLoginWorkspace">
+        <div className="adminTitleRow">
+          <div>
+            <span className="adminKicker">Restricted access</span>
+            <h1>Admin records</h1>
+            <p>Sign in with the server admin account to view visitor data.</p>
           </div>
-          <button type="button" onClick={onClear}>Clear reports</button>
-        </>
+          <button className="adminSecondaryButton" type="button" onClick={onClose}>Close</button>
+        </div>
+        <form className="adminLogin" onSubmit={signIn}>
+          <label>
+            <span>Admin ID</span>
+            <input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" required />
+          </label>
+          <label>
+            <span>Password</span>
+            <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="current-password" required />
+          </label>
+          {message && <p className="adminError">{message}</p>}
+          <button className="adminPrimaryButton" type="submit" disabled={status === 'signing-in'}>
+            {status === 'signing-in' ? 'Signing in...' : 'Open records'}
+          </button>
+        </form>
+      </section>
+    );
+  }
+
+  const stats = analytics?.stats || {};
+
+  return (
+    <section className="adminWorkspace">
+      <div className="adminTitleRow">
+        <div>
+          <span className="adminKicker">Operations</span>
+          <h1>Audience records</h1>
+          <p>Visitor identity, coarse network location, device details, and recent activity.</p>
+        </div>
+        <div className="adminTitleActions">
+          <button className="adminSecondaryButton" type="button" onClick={() => loadAnalytics().catch((error) => setMessage(error.message))}>Refresh</button>
+          <button className="adminSecondaryButton" type="button" onClick={signOut}>Sign out</button>
+          <button className="adminSecondaryButton" type="button" onClick={onClose}>Close</button>
+        </div>
+      </div>
+
+      {message && <p className="adminError">{message}</p>}
+
+      <div className="adminStats" aria-label="Audience summary">
+        <div><strong>{stats.totalVisitors || 0}</strong><span>Visitors</span></div>
+        <div><strong>{stats.observedUsers || 0}</strong><span>Observed users</span></div>
+        <div><strong>{stats.active24h || 0}</strong><span>Active 24h</span></div>
+        <div><strong>{stats.countries || 0}</strong><span>Countries</span></div>
+      </div>
+
+      <div className="adminToolbar">
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search user, IP, location, ISP or device" aria-label="Search visitor records" />
+        <label className="adminToggle">
+          <input type="checkbox" checked={activeOnly} onChange={(event) => setActiveOnly(event.target.checked)} />
+          <span>Active in 24h</span>
+        </label>
+        <span className="adminResultCount">{visitors.length} records</span>
+      </div>
+
+      <p className="adminPrivacyNote">Locations are estimated from IP addresses and may be inaccurate. No precise GPS data is collected.</p>
+
+      <div className="adminTableWrap">
+        <table className="adminTable">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Location</th>
+              <th>IP address</th>
+              <th>Device</th>
+              <th>Visits</th>
+              <th>Last seen</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visitors.map((visitor) => (
+              <tr
+                className={selectedId === visitor.id ? 'selected' : ''}
+                key={visitor.id}
+                onClick={() => setSelectedId(visitor.id === selectedId ? '' : visitor.id)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') setSelectedId(visitor.id === selectedId ? '' : visitor.id);
+                }}
+                tabIndex="0"
+              >
+                <td><strong>{visitor.username || 'Anonymous'}</strong><span>{visitor.id.slice(0, 8)}</span></td>
+                <td><strong>{visitorLocation(visitor)}</strong><span>{visitor.timezone || 'Timezone unavailable'}</span></td>
+                <td><code>{visitor.ip || 'Unavailable'}</code></td>
+                <td><strong>{visitor.device}</strong><span>{visitor.browser} / {visitor.os}</span></td>
+                <td>{visitor.visits}</td>
+                <td>{formatAdminDate(visitor.lastSeen)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!visitors.length && <p className="adminEmpty">No visitor records match this view.</p>}
+      </div>
+
+      {selected && (
+        <section className="adminDetail" aria-label="Selected visitor details">
+          <div className="adminSectionHeading">
+            <div><span>Selected visitor</span><h2>{selected.username || 'Anonymous visitor'}</h2></div>
+            <button className="adminSecondaryButton" type="button" onClick={() => setSelectedId('')}>Close details</button>
+          </div>
+          <dl className="adminDetailGrid">
+            <div><dt>First seen</dt><dd>{formatAdminDate(selected.firstSeen)}</dd></div>
+            <div><dt>Last seen</dt><dd>{formatAdminDate(selected.lastSeen)}</dd></div>
+            <div><dt>Last page</dt><dd>{selected.lastPath || '/'}</dd></div>
+            <div><dt>ISP</dt><dd>{selected.isp || 'Unavailable'}</dd></div>
+            <div><dt>Language</dt><dd>{selected.language || 'Unavailable'}</dd></div>
+            <div><dt>Screen</dt><dd>{selected.screen ? `${selected.screen.width} x ${selected.screen.height}` : 'Unavailable'}</dd></div>
+            <div><dt>User agent</dt><dd>{selected.userAgent || 'Unavailable'}</dd></div>
+            <div><dt>Known IPs</dt><dd>{(selected.ipHistory || []).map((entry) => entry.ip).join(', ') || 'Unavailable'}</dd></div>
+          </dl>
+        </section>
       )}
+
+      <section className="adminReports">
+        <div className="adminSectionHeading">
+          <div><span>Playback health</span><h2>Broken stream reports</h2></div>
+          <span>{reports.length} stored on this device</span>
+        </div>
+        {!reports.length ? <p className="adminEmpty">No broken links reported on this device.</p> : (
+          <>
+            <div className="reportList">
+              {reports.slice(0, 8).map((report) => (
+                <div className="reportRow" key={report.id}>
+                  <div>
+                    <strong>{report.title}</strong>
+                    <span>{report.quality} {report.server ? `via ${report.server}` : ''}</span>
+                  </div>
+                  <p>{report.reason}</p>
+                </div>
+              ))}
+            </div>
+            <button className="adminSecondaryButton" type="button" onClick={onClearReports}>Clear reports</button>
+          </>
+        )}
+      </section>
     </section>
   );
 }
