@@ -99,8 +99,9 @@ async function resolveRedirects(rawUrl) {
   for (let step = 0; step < 4; step += 1) {
     const response = await fetch(currentUrl, {
       cache: 'no-store',
-      method: 'HEAD',
+      method: 'GET',
       redirect: 'manual',
+      signal: AbortSignal.timeout(12000),
       headers: {
         Accept: 'video/*,*/*;q=0.8',
         Range: 'bytes=0-1',
@@ -113,12 +114,25 @@ async function resolveRedirects(rawUrl) {
       continue;
     }
 
-    return annotateDirect({
+    const direct = annotateDirect({
       downloadUrl: unwrapUrl(currentUrl),
       contentType: response.headers.get('content-type') || '',
       contentLength: response.headers.get('content-length') || '',
       contentDisposition: response.headers.get('content-disposition') || '',
     });
+    await response.body?.cancel();
+
+    if (direct.format === 'mkv' && response.status !== 206) {
+      return {
+        ...direct,
+        nativePlayable: false,
+        browserPlayable: false,
+        playbackEngine: '',
+        error: 'Server did not provide an MKV byte-range response.',
+      };
+    }
+
+    return direct;
   }
 
   return annotateDirect({ downloadUrl: unwrapUrl(currentUrl), contentType: '', contentLength: '', contentDisposition: '' });
