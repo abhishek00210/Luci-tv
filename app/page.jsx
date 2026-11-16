@@ -1073,6 +1073,9 @@ function Player({ player, onClose, onStream, onProgress, onWatchlist, inWatchlis
   const seasons = parseSeasons(detail);
   const firstStream = downloads[0] || seasons[0]?.episodes[0]?.qualities[0] || null;
   const activeStreamUrl = stream?.resolvedUrl || '';
+  const currentDownloadUrl = activeStreamUrl.startsWith('/api/media?')
+    ? `${activeStreamUrl}&download=1`
+    : activeStreamUrl;
   const rawSourceUrl = stream?.downloadUrl || '';
   const resume = detail.resume;
   const format = stream?.format?.toUpperCase() || (stream?.contentType?.includes('mkv') ? 'MKV' : getVideoFormat(activeStreamUrl || rawSourceUrl || stream?.contentDisposition || stream?.formatHint));
@@ -1290,6 +1293,11 @@ function Player({ player, onClose, onStream, onProgress, onWatchlist, inWatchlis
           </select>
         </div>
         <button type="button" onClick={enterPictureInPicture} disabled={!activeStreamUrl}>Picture in picture</button>
+        {currentDownloadUrl && (
+          <a className="downloadCurrent" href={currentDownloadUrl} download={`${detail.title || 'Video'}.${format === 'MKV' ? 'mkv' : 'mp4'}`}>
+            Download this quality
+          </a>
+        )}
         {stream?.allServers?.length > 1 && (
           <div className="serverGroup">
             <span>Servers</span>

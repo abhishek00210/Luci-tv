@@ -712,6 +712,7 @@ button {
 
 .metaActions button,
 .playerTools button,
+.playerTools .downloadCurrent,
 .subtitleUpload {
   min-height: 34px;
   display: inline-flex;

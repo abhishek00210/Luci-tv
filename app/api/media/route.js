@@ -88,6 +88,7 @@ async function proxyMedia(request, method) {
     const value = upstream.headers.get(header);
     if (value) responseHeaders.set(header, value);
   }
+  if (searchParams.get('download') === '1') responseHeaders.set('Content-Disposition', 'attachment');
 
   if (method === 'HEAD') {
     const totalLength = upstream.headers.get('content-range')?.split('/').pop();
