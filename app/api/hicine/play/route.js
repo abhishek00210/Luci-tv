@@ -65,7 +65,8 @@ export async function GET(request) {
               const proxyPath = createMediaProxyPath(videoUrl.toString());
               if (proxyPath) return Response.json({ url: proxyPath, episode: item.ep, host: option.id, seekable: true }, { headers: { 'Cache-Control': 'no-store' } });
             } else {
-              return Response.json({ url: videoUrl.toString(), episode: item.ep, host: option.id, seekable: false }, { headers: { 'Cache-Control': 'no-store' } });
+              const proxyPath = createMediaProxyPath(videoUrl.toString());
+              return Response.json({ url: proxyPath || videoUrl.toString(), episode: item.ep, host: option.id, seekable: false }, { headers: { 'Cache-Control': 'no-store' } });
             }
           } catch { /* Try the next source. */ }
         }
