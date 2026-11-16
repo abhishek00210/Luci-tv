@@ -262,8 +262,19 @@ function parseSeasons(item) {
   return seasons;
 }
 
+function hicineDownloads(detail) {
+  return (detail.groups || []).filter((group) => group.k).map((group) => ({
+    downloadUrl: `hicine:${group.k}`,
+    hicineGroupKey: group.k,
+    quality: group.head || group.quality || 'Video',
+    size: group.size || '',
+    mediaKind: group.season ? 'episode' : 'movie',
+  }));
+}
+
 function getPlayableDownloads(detail) {
   return [
+    ...hicineDownloads(detail),
     ...parseMovieLinks(detail.links || detail.cloudlinks),
     ...parseSeasons(detail).flatMap((season) => season.episodes.flatMap((episode) => episode.qualities)),
   ];
@@ -391,6 +402,12 @@ function buildSubtitleUrl(text, offsetSeconds = 0) {
 }
 
 async function resolveStream(download, preferredServer = '') {
+  if (download.hicineGroupKey) {
+    const response = await fetch(`/api/hicine/play?k=${encodeURIComponent(download.hicineGroupKey)}`);
+    const data = await response.json();
+    if (!response.ok || !data.url) throw new Error(data.error || 'Unable to resolve video.');
+    return { ...download, resolvedUrl: data.url, server: data.host, browserPlayable: true, nativePlayable: true, playbackEngine: 'native', format: 'MP4' };
+  }
   const params = new URLSearchParams({ url: download.downloadUrl });
   if (preferredServer) params.set('server', preferredServer);
   const response = await fetch(`/api/resolve-stream?${params.toString()}`);
@@ -1045,7 +1062,7 @@ function Player({ player, onClose, onStream, onProgress, onWatchlist, inWatchlis
   const [subtitleOffset, setSubtitleOffset] = useState(0);
   const progressTick = useRef(0);
   const videoRef = useRef(null);
-  const downloads = parseMovieLinks(detail.links || detail.cloudlinks);
+  const downloads = [...hicineDownloads(detail), ...parseMovieLinks(detail.links || detail.cloudlinks)];
   const seasons = parseSeasons(detail);
   const firstStream = downloads[0] || seasons[0]?.episodes[0]?.qualities[0] || null;
   const activeStreamUrl = stream?.resolvedUrl || '';
@@ -1314,7 +1331,7 @@ function DownloadRow({ download, onStream, active = false, compact = false }) {
       </div>
       <div className="downloadActions">
         <button type="button" onClick={() => onStream(download)}>Stream</button>
-        <a href={downloadUrl(download.downloadUrl)}>Download</a>
+        {!download.hicineGroupKey && <a href={downloadUrl(download.downloadUrl)}>Download</a>}
       </div>
     </div>
   );
