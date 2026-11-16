@@ -797,6 +797,19 @@ button {
   padding: 5px;
 }
 
+.playerSeekWarning {
+  position: absolute;
+  z-index: 8;
+  left: 12px;
+  bottom: 54px;
+  max-width: calc(100% - 24px);
+  padding: 8px 10px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, .82);
+  color: white;
+  font-size: 12px;
+}
+
 .playerBox movi-player {
   display: block;
   --movi-primary: #e50914;

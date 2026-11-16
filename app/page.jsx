@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-const VideoReactPlayer = dynamic(() => import('video-react').then((module) => module.Player), { ssr: false });
+const VideoReactPlayer = dynamic(() => import('./VideoReactPlayer'), { ssr: false });
 
 const MkvPlayer = dynamic(() => import('./MkvPlayer'), {
   ssr: false,
@@ -1063,6 +1063,7 @@ function FilterBar({ filters, options, total, shown, onChange, onClear }) {
 function Player({ player, onClose, onStream, onProgress, onWatchlist, inWatchlist, onReport, similarItems, onSelectSimilar }) {
   const { detail, loading, stream, streamError } = player;
   const [playbackFailure, setPlaybackFailure] = useState('');
+  const [seekWarning, setSeekWarning] = useState('');
   const [playbackRate, setPlaybackRate] = useState(1);
   const [subtitle, setSubtitle] = useState(null);
   const [subtitleOffset, setSubtitleOffset] = useState(0);
@@ -1083,6 +1084,7 @@ function Player({ player, onClose, onStream, onProgress, onWatchlist, inWatchlis
 
   useEffect(() => {
     setPlaybackFailure('');
+    setSeekWarning('');
     progressTick.current = 0;
   }, [stream?.downloadUrl]);
 
@@ -1179,7 +1181,12 @@ function Player({ player, onClose, onStream, onProgress, onWatchlist, inWatchlis
                 onFailure={setPlaybackFailure}
               />
             ) : (
-              <div className="videoReactFrame">
+              <div className="videoReactFrame" onClickCapture={(event) => {
+                if (!event.target.closest('.video-react-progress-control, .video-react-replay-control, .video-react-forward-control')) return;
+                const element = videoRef.current?.video?.video;
+                if (element?.seekable?.length && element.seekable.end(element.seekable.length - 1) > 0) return;
+                setSeekWarning('This video server does not support jumping to another time.');
+              }}>
                 <VideoReactPlayer
                   key={activeStreamUrl}
                   ref={videoRef}
@@ -1229,6 +1236,7 @@ function Player({ player, onClose, onStream, onProgress, onWatchlist, inWatchlis
                     </select>
                   </label>
                 )}
+                {seekWarning && <p className="playerSeekWarning" role="status">{seekWarning}</p>}
               </div>
             )}
             {playbackFailure && (
