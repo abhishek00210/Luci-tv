@@ -3,6 +3,8 @@
 import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+const VideoReactPlayer = dynamic(() => import('video-react').then((module) => module.Player), { ssr: false });
+
 const MkvPlayer = dynamic(() => import('./MkvPlayer'), {
   ssr: false,
   loading: () => (
@@ -803,6 +805,10 @@ function App() {
           resumeAt: normalized.resume?.time || 0,
           shouldRemember: false,
         });
+      } else if (detail.kind === 'movie') {
+        const versions = hicineDownloads(detail);
+        const preferred = versions.find((version) => /720p/i.test(version.quality)) || versions[0];
+        if (preferred) startStream(preferred, { detail, shouldRemember: false });
       }
     } catch {
       setPlayer({ item: normalized, detail: normalized, loading: false, stream: null });
@@ -1109,12 +1115,13 @@ function Player({ player, onClose, onStream, onProgress, onWatchlist, inWatchlis
   }
 
   async function enterPictureInPicture() {
-    if (!videoRef.current || !document.pictureInPictureEnabled) return;
+    const videoElement = videoRef.current?.video?.video || videoRef.current;
+    if (!videoElement || !document.pictureInPictureEnabled) return;
     try {
       if (document.pictureInPictureElement) {
         await document.exitPictureInPicture();
       } else {
-        await videoRef.current.requestPictureInPicture();
+        await videoElement.requestPictureInPicture();
       }
     } catch {
       setPlaybackFailure('Picture in picture is not available in this browser.');
@@ -1172,23 +1179,57 @@ function Player({ player, onClose, onStream, onProgress, onWatchlist, inWatchlis
                 onFailure={setPlaybackFailure}
               />
             ) : (
-              <video
-                ref={videoRef}
-                src={activeStreamUrl}
-                controls
-                autoPlay
-                playsInline
-                onLoadedMetadata={(event) => {
-                  if (stream.resumeAt > 8 && stream.resumeAt < event.currentTarget.duration - 5) {
-                    event.currentTarget.currentTime = stream.resumeAt;
-                  }
-                }}
-                onTimeUpdate={(event) => trackProgress(event.currentTarget.currentTime, event.currentTarget.duration)}
-                onPause={(event) => onProgress(detail, stream, event.currentTarget.currentTime, event.currentTarget.duration)}
-                onError={() => setPlaybackFailure(playbackMessage)}
-              >
-                {subtitle?.url && <track key={subtitle.url} src={subtitle.url} kind="subtitles" srcLang="en" label={subtitle.name || 'Custom'} default />}
-              </video>
+              <div className="videoReactFrame">
+                <VideoReactPlayer
+                  key={activeStreamUrl}
+                  ref={videoRef}
+                  src={activeStreamUrl}
+                  poster={detail.image}
+                  autoPlay
+                  playsInline
+                  fluid={false}
+                  width="100%"
+                  height="100%"
+                  startTime={stream.resumeAt || 0}
+                  onCanPlay={() => {
+                    const element = videoRef.current?.video?.video;
+                    element?.play()?.catch(() => {
+                      element.muted = true;
+                      element.play().catch(() => setPlaybackFailure('Press play to start this video.'));
+                    });
+                  }}
+                  onTimeUpdate={() => {
+                    const state = videoRef.current?.getState()?.player;
+                    if (state) trackProgress(state.currentTime, state.duration);
+                  }}
+                  onPause={() => {
+                    const state = videoRef.current?.getState()?.player;
+                    if (state) onProgress(detail, stream, state.currentTime, state.duration);
+                  }}
+                  onError={() => setPlaybackFailure(playbackMessage)}
+                >
+                  {subtitle?.url && <track key={subtitle.url} src={subtitle.url} kind="subtitles" srcLang="en" label={subtitle.name || 'Custom'} default />}
+                </VideoReactPlayer>
+                {downloads.filter((download) => download.hicineGroupKey).length > 1 && (
+                  <label className="playerQuality">
+                    <span>Quality</span>
+                    <select
+                      aria-label="Video quality"
+                      value={stream.downloadUrl}
+                      onChange={(event) => {
+                        const next = downloads.find((download) => download.downloadUrl === event.target.value);
+                        if (!next) return;
+                        const currentTime = videoRef.current?.getState()?.player?.currentTime || 0;
+                        onStream(next, { detail, resumeAt: currentTime, shouldRemember: false });
+                      }}
+                    >
+                      {downloads.filter((download) => download.hicineGroupKey).map((download) => (
+                        <option key={download.downloadUrl} value={download.downloadUrl}>{download.quality}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </div>
             )}
             {playbackFailure && (
               <div className="playerFallback">
@@ -1278,11 +1319,11 @@ function Player({ player, onClose, onStream, onProgress, onWatchlist, inWatchlis
 
       {loading && <p className="empty">Loading full title details...</p>}
 
-      {!loading && Boolean(downloads.length) && (
+      {!loading && Boolean(downloads.some((download) => !download.hicineGroupKey)) && (
         <section className="downloads">
           <p className="sectionLabel">Downloads</p>
           <div className="downloadList">
-            {downloads.slice(0, 8).map((download, index) => (
+            {downloads.filter((download) => !download.hicineGroupKey).slice(0, 8).map((download, index) => (
               <DownloadRow download={download} active={stream?.downloadUrl === download.downloadUrl} onStream={onStream} key={`${download.downloadUrl}-${index}`} />
             ))}
           </div>

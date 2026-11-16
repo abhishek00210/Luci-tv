@@ -1,3 +1,4 @@
+import 'video-react/dist/video-react.css';
 import './globals.css';
 
 export const metadata = {
