@@ -55,6 +55,10 @@ async function proxyMedia(request, method) {
   const requestHeaders = new Headers({
     Accept: 'video/*,application/octet-stream,*/*;q=0.8',
   });
+  if (sourceUrl.hostname.endsWith('.r2.dev')) {
+    requestHeaders.set('Origin', 'https://hicine.biz');
+    requestHeaders.set('Referer', 'https://hicine.biz/');
+  }
   for (const header of FORWARDED_REQUEST_HEADERS) {
     const value = request.headers.get(header);
     if (value) requestHeaders.set(header, value);
