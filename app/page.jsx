@@ -14,71 +14,54 @@ const MkvPlayer = dynamic(() => import('./MkvPlayer'), {
 });
 
 const librarySections = [
-  { label: 'Trending', type: 'trending', group: 'Library', path: '/api/trending', flat: true },
-  { label: 'Movies', type: 'movies', group: 'Library', path: '/api/movies', collection: 'movies' },
-  { label: 'Series', type: 'series', group: 'Library', path: '/api/series', collection: 'series' },
-  { label: 'Anime', type: 'anime', group: 'Library', path: '/api/anime', collection: 'anime' },
-  { label: 'Bolly Movies', type: 'bolly_movies', group: 'Library', path: '/api/bolly_movies', collection: 'bolly_movies' },
-  { label: 'Bolly Series', type: 'bolly_series', group: 'Library', path: '/api/bolly_series', collection: 'bolly_series' },
+  { label: 'Trending', type: 'trending', group: 'Library', path: '/hapi/home' },
+  { label: 'Movies', type: 'movies', group: 'Library', path: '/hapi/browse', browseType: 'movie' },
+  { label: 'Series', type: 'series', group: 'Library', path: '/hapi/browse', browseType: 'series' },
+  { label: 'Anime', type: 'anime', group: 'Library', path: '/hapi/browse', browseType: 'anime' },
+  { label: 'Bollywood Movies', type: 'bolly_movies', group: 'Library', path: '/hapi/browse', browseType: 'movie', industry: 'bollywood' },
+  { label: 'Bollywood Series', type: 'bolly_series', group: 'Library', path: '/hapi/browse', browseType: 'series', industry: 'bollywood' },
 ];
 
 const platformSections = [
-  { label: 'Netflix', type: 'netflix', group: 'Platforms', path: '/rpc/platform/netflix', flat: true },
-  { label: 'Amazon', type: 'amazon', group: 'Platforms', path: '/rpc/platform/amazon', flat: true },
-  { label: 'Disney+', type: 'disney', group: 'Platforms', path: '/rpc/platform/disney', flat: true },
-  { label: 'Hotstar', type: 'hotstar', group: 'Platforms', path: '/rpc/platform/hotstar', flat: true },
-  { label: 'JioHotstar', type: 'jiohotstar', group: 'Platforms', path: '/rpc/platform/jiohotstar', flat: true },
-  { label: 'Apple TV+', type: 'apple', group: 'Platforms', path: '/rpc/platform/apple', flat: true },
-  { label: 'Zee5', type: 'zee5', group: 'Platforms', path: '/rpc/platform/zee5', flat: true },
-  { label: 'SonyLIV', type: 'sony', group: 'Platforms', path: '/rpc/platform/sony', flat: true },
-  { label: 'Hulu', type: 'hulu', group: 'Platforms', path: '/rpc/platform/hulu', flat: true },
-  { label: 'HBO', type: 'hbo', group: 'Platforms', path: '/rpc/platform/hbo', flat: true },
-];
+  ['Netflix', 'netflix'], ['Prime Video', 'prime'], ['JioHotstar', 'hotstar'],
+  ['ZEE5', 'zee5'], ['SonyLIV', 'sonyliv'], ['Apple TV+', 'appletv'],
+  ['MX Player', 'mxplayer'], ['Hoichoi', 'hoichoi'], ['ULLU', 'ullu'],
+  ['Voot', 'voot'], ['ALTBalaji', 'altbalaji'], ['Kooku', 'kooku'],
+  ['Lionsgate Play', 'lionsgate'],
+].map(([label, type]) => ({ label, type, group: 'Platforms', path: '/hapi/browse', prov: type }));
 
 const categorySections = [
-  { label: 'Dual Audio', type: 'dual_audio', group: 'Categories', path: '/api/movies', collection: 'movies', category: 'Dual Audio Movies' },
-  { label: 'Action', type: 'action', group: 'Categories', path: '/api/movies', collection: 'movies', category: 'Action' },
-  { label: 'Comedy', type: 'comedy', group: 'Categories', path: '/api/movies', collection: 'movies', category: 'Comedy' },
-  { label: 'Romance', type: 'romance', group: 'Categories', path: '/api/movies', collection: 'movies', category: 'Romance' },
-  { label: 'Family', type: 'family', group: 'Categories', path: '/api/movies', collection: 'movies', category: 'Family' },
-  { label: 'Horror', type: 'horror', group: 'Categories', path: '/api/movies', collection: 'movies', category: 'Horror' },
-  { label: 'Thriller', type: 'thriller', group: 'Categories', path: '/api/movies', collection: 'movies', category: 'Thriller' },
-];
+  'Action', 'Adventure', 'Comedy', 'Drama', 'Thriller', 'Horror', 'Romance',
+  'Sci-Fi', 'Fantasy', 'Crime', 'Mystery', 'Animation', 'Family',
+  'Documentary', 'Biography', 'History', 'War', 'Western', 'Musical',
+  'Music', 'Sport', 'Suspense', 'Short', 'Reality-TV', '18+ Adult',
+].map((label) => ({
+  label, type: `genre_${label.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
+  group: 'Categories', path: '/hapi/browse',
+  genre: label === '18+ Adult' ? 'erotic' : label.toLowerCase(),
+}));
 
-const qualitySections = [
-  { label: 'WEB-DL', type: 'webdl', group: 'Quality', path: '/api/movies', collection: 'movies', category: 'WEB-DL' },
-  { label: 'HDRip', type: 'hdrip', group: 'Quality', path: '/api/movies', collection: 'movies', category: 'HDRip' },
-  { label: '1080p', type: '1080p', group: 'Quality', path: '/api/movies', collection: 'movies', category: '1080p' },
-  { label: '720p', type: '720p', group: 'Quality', path: '/api/movies', collection: 'movies', category: '720p' },
-  { label: '480p', type: '480p', group: 'Quality', path: '/api/movies', collection: 'movies', category: '480p' },
-  { label: '2026', type: 'year_2026', group: 'Quality', path: '/api/movies', collection: 'movies', category: '2026' },
-];
+const languageSections = [
+  ['Hindi', 'hindi'], ['English', 'english'], ['Dual Audio', 'dual-audio'],
+  ['Punjabi', 'punjabi'], ['Tamil', 'tamil'], ['Telugu', 'telugu'],
+  ['Korean', 'korean'], ['Bengali', 'bengali'], ['Malayalam', 'malayalam'],
+  ['Marathi', 'marathi'], ['Kannada', 'kannada'], ['Gujarati', 'gujarati'],
+  ['Chinese', 'chinese'],
+].map(([label, lang]) => ({ label, type: `lang_${lang}`, group: 'Languages', path: '/hapi/browse', lang }));
 
-const sections = [...librarySections, ...platformSections, ...categorySections, ...qualitySections];
+const sections = [...librarySections, ...platformSections, ...categorySections, ...languageSections];
 const navGroups = [
   { label: 'Library', sections: librarySections },
   { label: 'Platforms', sections: platformSections },
   { label: 'Categories', sections: categorySections },
-  { label: 'Quality', sections: qualitySections },
+  { label: 'Languages', sections: languageSections },
 ];
-const globalSearchSections = librarySections.filter((item) => item.type !== 'trending');
-const searchableCollections = librarySections.filter((item) => item.collection);
-const HICINE_ORIGIN = 'https://api.hicine.info';
-const apiOrigin = process.env.NEXT_PUBLIC_API_ORIGIN || HICINE_ORIGIN;
 const defaultFilters = { genre: '', year: '', quality: '', language: '' };
 const adminUsername = 'babu';
 
 function apiUrl(path) {
-  if (/^https?:\/\//.test(path)) return path;
-  if (path.startsWith('/api/resolve-stream')) return path;
-  if (apiOrigin === HICINE_ORIGIN && (path.startsWith('/api/') || path.startsWith('/rpc/') || path.startsWith('/health'))) {
-    const [pathname, query = ''] = path.split('?');
-    const endpoint = pathname.replace(/^\/+/, '').replace(/^api\/+/, '');
-    const params = new URLSearchParams(query);
-    params.set('endpoint', endpoint);
-    return `/api/proxy?${params.toString()}`;
-  }
-  return `${apiOrigin}${path}`;
+  if (path.startsWith('/hapi/')) return `/api/hicine/${path.slice('/hapi/'.length)}`;
+  return path;
 }
 
 function decodeText(value = '') {
@@ -96,6 +79,7 @@ function decodeText(value = '') {
 function getYear(item) {
   const fromTitle = String(item.title || '').match(/\b(19|20)\d{2}\b/);
   if (fromTitle) return fromTitle[0];
+  if (item.year) return String(item.year);
   if (item.date) return new Date(item.date).getFullYear().toString();
   return '';
 }
@@ -126,7 +110,7 @@ function getFormatHint(item) {
 }
 
 function resolveCollection(item, fallbackType) {
-  const source = item.contentType || item.source_table || item.collection || fallbackType;
+  const source = item.kind || item.contentType || item.source_table || item.collection || fallbackType;
   const aliases = {
     hollywood_movies: 'movies',
     hollywood_series: 'series',
@@ -139,18 +123,18 @@ function resolveCollection(item, fallbackType) {
 function normalizeItem(item, fallbackType) {
   const contentType = resolveCollection(item, fallbackType);
   const image = item.featured_image || item.poster || item.image;
-  const slug = item.url_slug || item.slug;
+  const slug = item.id || item.url_slug || item.slug;
 
   return {
     ...item,
-    id: item._id || item.record_id || slug || item.title,
+    id: item.id || item._id || item.record_id || slug || item.title,
     title: decodeText(item.title || 'Untitled'),
     image,
     featured_image: image,
     contentType,
     year: getYear(item),
-    categories: decodeText(item.categories || ''),
-    overview: decodeText(item.excerpt || item.content || item.categories || ''),
+    categories: decodeText(item.categories || item.kind || ''),
+    overview: decodeText(item.plot || item.excerpt || item.content || item.categories || ''),
     qualityHints: getQualityHints(item),
     languageHints: getLanguageHints(item),
     formatHint: getFormatHint(item),
@@ -176,10 +160,10 @@ async function fetchJson(url, signal) {
 }
 
 function parseList(payload, type) {
-  const rows = Array.isArray(payload) ? payload : payload.data || payload.results || payload.items || [];
+  const rows = Array.isArray(payload) ? payload : payload.items || payload.results || payload.data || [];
   return {
     data: rows.map((item) => normalizeItem(item, type)),
-    pagination: payload.pagination || null,
+    pagination: payload.pagination || { hasMore: Boolean(payload.hasMore) },
   };
 }
 
@@ -297,29 +281,22 @@ function findResumeDownload(detail, resume) {
     || null;
 }
 
-function buildSectionUrl(section, query = '', limitOverride) {
-  const params = new URLSearchParams();
-  if (section.path.startsWith('/rpc/')) {
-    params.set('limit', limitOverride || '300');
-  } else {
-    params.set('page', '1');
-    params.set('limit', limitOverride || (query ? '80' : '60'));
+function buildSectionUrl(section, query = '') {
+  if (query) return buildSearchUrl(query);
+  if (section.path === '/hapi/home') return section.path;
+  const params = new URLSearchParams({ page: '1' });
+  for (const key of ['browseType', 'prov', 'genre', 'year', 'lang', 'industry']) {
+    if (section[key]) params.set(key === 'browseType' ? 'type' : key, section[key]);
   }
-  if (section.category) params.set('category', section.category);
-  if (query) {
-    params.set('search', query);
-    params.set('q', query);
-  }
-  return `${section.path}?${params.toString()}`;
+  return `${section.path}?${params}`;
 }
 
 function buildSearchUrl(query) {
-  return `/api/search/${encodeURIComponent(query)}`;
+  return `/hapi/search?q=${encodeURIComponent(query)}&page=1`;
 }
 
 function detailUrl(contentType, slug) {
-  if (!contentType || !slug) return '';
-  return `/api/${contentType}/${slug}`;
+  return slug ? `/hapi/t?c=${encodeURIComponent(slug)}` : '';
 }
 
 function downloadUrl(rawUrl) {
@@ -540,46 +517,19 @@ function dedupe(items) {
 }
 
 async function globalSearch(query, signal) {
-  const lowered = query.toLowerCase();
-  const directSearch = fetchJson(buildSearchUrl(query), signal)
-    .then((payload) => parseList(payload, 'search').data.map((item) => ({ ...item, searchGroup: 'All' })));
-
-  const bruteForceSearch = Promise.allSettled(
-    globalSearchSections.map(async (section) => {
-      const payload = await fetchJson(buildSectionUrl(section, section.path.startsWith('/rpc/') ? '' : query, section.path.startsWith('/rpc/') ? '300' : '30'), signal);
-      const parsed = parseList(payload, section.collection || section.type).data;
-      const filtered = section.path.startsWith('/rpc/')
-        ? parsed.filter((item) => item.title.toLowerCase().includes(lowered))
-        : parsed;
-      return filtered.map((item) => ({ ...item, searchGroup: section.label }));
-    }),
-  );
-
-  const [directResult, bruteForceResult] = await Promise.allSettled([directSearch, bruteForceSearch]);
-  const directItems = directResult.status === 'fulfilled' ? directResult.value : [];
-  const bruteForceItems = bruteForceResult.status === 'fulfilled'
-    ? bruteForceResult.value.flatMap((result) => (result.status === 'fulfilled' ? result.value : []))
-    : [];
-
-  return dedupe([...directItems, ...bruteForceItems]).slice(0, 160);
+  const payload = await fetchJson(buildSearchUrl(query), signal);
+  return parseList(payload, 'search').data;
 }
 
-async function fetchSectionItems(section, signal, limitOverride) {
-  if (section.category && !section.forceSingleCollection) {
-    const results = await Promise.allSettled(
-      searchableCollections.map(async (collectionSection) => {
-        const payload = await fetchJson(buildSectionUrl(collectionSection, '', limitOverride || '80'), signal);
-        return parseList(payload, collectionSection.collection).data
-          .filter((item) => itemMatchesCategory(item, section.category));
-      }),
-    );
-
-    return dedupe(results.flatMap((result) => (result.status === 'fulfilled' ? result.value : [])));
+async function fetchSectionItems(section, signal) {
+  const payload = await fetchJson(buildSectionUrl(section), signal);
+  if (section.path === '/hapi/home') {
+    return dedupe([
+      ...(payload.heroes || []), ...(payload.trending || []),
+      ...(payload.movies || []), ...(payload.newEps || []),
+    ].map((item) => normalizeItem(item, item.kind || section.type)));
   }
-
-  const payload = await fetchJson(buildSectionUrl(section, '', limitOverride), signal);
-  return parseList(payload, section.collection || section.type).data
-    .filter((item) => itemMatchesCategory(item, section.category));
+  return parseList(payload, section.type).data;
 }
 
 function AuthGate({ onAuth }) {
@@ -753,15 +703,11 @@ function App() {
         setHeroItem(sectionItems[0] || null);
 
         if (activeType === 'trending') {
-          const rows = await Promise.all(
-            [librarySections[1], librarySections[2], categorySections[1], qualitySections[2]].map(async (section) => {
-              return {
-                title: section.label,
-                items: (await fetchSectionItems(section, controller.signal, '18')).slice(0, 18),
-              };
-            }),
-          );
-          setHomeRows(rows);
+          const home = await fetchJson('/hapi/home', controller.signal);
+          setHomeRows((home.rows || []).map((row) => ({
+            title: row.title,
+            items: (row.items || []).map((item) => normalizeItem(item, item.kind || 'movie')),
+          })));
         } else {
           setHomeRows([]);
         }
@@ -1349,6 +1295,8 @@ function Player({ player, onClose, onStream, onProgress, onWatchlist, inWatchlis
           </div>
         </section>
       )}
+
+      {!loading && !downloads.length && !seasons.length && <p className="empty">Video playback is not available from this catalog source.</p>}
 
       {!loading && Boolean(similarItems.length) && (
         <MediaRail title="Similar titles" items={similarItems} selectedId={detail.id} onSelect={onSelectSimilar} />

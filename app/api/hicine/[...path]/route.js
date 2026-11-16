@@ -1,8 +1,7 @@
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const HICINE_ORIGIN = process.env.PRODUCTION_API_URL || 'https://api.hicine.info';
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = process.env.NODE_TLS_REJECT_UNAUTHORIZED || '0';
+const HICINE_ORIGIN = process.env.PRODUCTION_API_URL || 'https://hicine.biz';
 
 function json(body, status = 200) {
   return Response.json(body, {
@@ -16,22 +15,11 @@ function json(body, status = 200) {
   });
 }
 
+const ALLOWED_PATHS = new Set(['home', 'browse', 'list', 'search', 't', 'g', 'health']);
+
 function normalizePath(path) {
-  const parts = [...path];
-  if (parts[0] === 'api') parts.shift();
-
-  if (parts[0] === 'rpc') {
-    if (parts[1] === 'platform' && parts[2]) {
-      return `/api/platform/${parts.slice(2).join('/')}`;
-    }
-    if (parts[1] === 'genre' && parts[2]) {
-      return `/api/search/${parts.slice(2).join(' ')}`;
-    }
-    return '/api/trending';
-  }
-
-  if (parts[0] === 'health') return '/health';
-  return `/api/${parts.join('/')}`;
+  if (path.length !== 1 || !ALLOWED_PATHS.has(path[0])) return null;
+  return `/hapi/${path[0]}`;
 }
 
 async function fetchHicine(upstreamUrl) {
@@ -39,9 +27,6 @@ async function fetchHicine(upstreamUrl) {
     cache: 'no-store',
     headers: {
       Accept: 'application/json',
-      Origin: 'https://www.hicine.info',
-      Referer: 'https://www.hicine.info/',
-      'User-Agent': 'Luci-TV/1.0',
     },
   });
   const text = await response.text();
@@ -58,7 +43,7 @@ async function fetchHicine(upstreamUrl) {
       status: 502,
       data: {
         error: 'Invalid upstream response',
-        message: 'api.hicine.info did not return JSON.',
+        message: 'hicine.biz did not return JSON.',
         preview: text.replace(/\s+/g, ' ').trim().slice(0, 180),
       },
     };
@@ -79,7 +64,9 @@ export async function OPTIONS() {
 export async function GET(request, { params }) {
   try {
     const path = (await params).path || [];
-    const upstreamUrl = new URL(normalizePath(path), HICINE_ORIGIN);
+    const normalizedPath = normalizePath(path);
+    if (!normalizedPath) return json({ error: 'Unknown catalog endpoint' }, 404);
+    const upstreamUrl = new URL(normalizedPath, HICINE_ORIGIN);
     upstreamUrl.search = new URL(request.url).search;
 
     const upstream = await fetchHicine(upstreamUrl);
@@ -88,7 +75,7 @@ export async function GET(request, { params }) {
     return json(
       {
         error: 'Hicine request failed',
-        message: error.cause?.message || error.message || 'Unable to fetch api.hicine.info.',
+        message: error.cause?.message || error.message || 'Unable to fetch hicine.biz.',
       },
       502,
     );
